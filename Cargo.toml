@@ -1,0 +1,11 @@
+[package]
+name = "lieutenant"
+version = "0.1.0"
+authors = ["caelunshun <caelunshun@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+slab = "0.4"
+smallvec = "1.4"
+bstr = "0.2"
