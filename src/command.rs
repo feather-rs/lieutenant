@@ -1,18 +1,18 @@
 use crate::ArgumentChecker;
 use std::borrow::Cow;
 
-pub struct CommandNode {
-    pub kind: CommandNodeKind,
-    pub next: Vec<CommandNode>,
-    pub exec: Option<Box<dyn Fn(&[&str])>>,
+pub struct CommandNode<C> {
+    pub kind: CommandNodeKind<C>,
+    pub next: Vec<CommandNode<C>>,
+    pub exec: Option<Box<dyn Fn(&mut C, &[&str])>>,
 }
 
-pub enum CommandNodeKind {
+pub enum CommandNodeKind<C> {
     Literal(Cow<'static, str>),
-    Parser(Box<dyn ArgumentChecker>),
+    Parser(Box<dyn ArgumentChecker<C>>),
 }
 
-pub trait Command {
+pub trait Command<C> {
     /// Returns the root node for parsing this command.
-    fn into_root_node(self) -> CommandNode;
+    fn into_root_node(self) -> CommandNode<C>;
 }

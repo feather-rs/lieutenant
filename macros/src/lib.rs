@@ -1,21 +1,23 @@
 use darling::ast::GenericParamExt;
 use darling::FromMeta;
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::*;
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, AttributeArgs, FnArg, ItemFn, Pat, PatType, Type};
+use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, Type};
 
-#[derive(FromMeta)]
+#[derive(Debug, FromMeta)]
 struct Args {
     usage: String,
 }
 
+#[derive(Debug)]
 struct Usage {
     arguments: Vec<Argument>,
     root_literal: String,
 }
 
+#[derive(Debug)]
 enum Argument {
     Parameter { name: String },
     OptionalParameter { name: String },
@@ -52,41 +54,36 @@ pub fn command(
     let usage = parse_usage(&args.usage);
     let parameters = collect_parameters(&usage, &input.sig.inputs.iter());
 
-    let root_literal = &usage.root_literal;
-
-    let mut builder_calls = vec![quote! {
-        CommandBuilder::new(#root_literal)
-    }];
-    for argument in &usage.arguments {
-        match argument {
-            Argument::Parameter { .. } | Argument::OptionalParameter { .. } => {
-                builder_calls.push(quote! { .arg() })
-            }
-            Argument::Literal { value } => builder_calls.push(quote! { .literal(#value) }),
-        }
-    }
-
-    let mut params_tuple = vec![];
-    let mut params_tuple_type = vec![];
-    for parameter in parameters {
-        let ty = &parameter.ty;
-        let pat = &parameter.pat;
-        params_tuple.push(quote! {
-            #pat
-        });
-        params_tuple_type.push(quote! {
-            #ty
-        });
-    }
+    let ctx_type = detect_context_type(&parameters, input.sig.inputs.iter().next());
 
     let command_ident = &input.sig.ident;
-    let block = &input.block;
+
+    let impl_header = if let Some((ctx_type, _)) = ctx_type {
+        quote! {
+            impl lieutenant::Command<#ctx_type> for #command_ident
+        }
+    } else {
+        quote! {
+            impl <C> lieutenant::Command<C> for #command_ident
+        }
+    };
+
+    let ctx_actual_type = if let Some((ty, _)) = ctx_type {
+        quote! { #ty }
+    } else {
+        quote! { C }
+    };
+
+    let into_root_node = generate_into_root_node(&usage, &parameters, ctx_type, &input.block);
+    let visibility = &input.vis;
     let tokens = quote! {
-        fn #command_ident() -> impl lieutenant::Command {
-            #(#builder_calls)*
-                .build(|(#(#params_tuple),*): (#(#params_tuple_type),*)| {
-                    #block
-                })
+        #[allow(non_camel_case_types)]
+        #visibility struct #command_ident;
+
+        #impl_header {
+            fn into_root_node(self) -> lieutenant::CommandNode<#ctx_actual_type> {
+                #into_root_node
+            }
         }
     };
     tokens.into()
@@ -240,4 +237,148 @@ fn find_corresponding_arg<'a>(
 
 fn possible_parameter_idents(name: &str) -> Vec<String> {
     vec![name.to_owned(), format!("_{}", name)]
+}
+
+fn detect_context_type<'a>(
+    parameter_types: &[&PatType],
+    first_arg: Option<&'a FnArg>,
+) -> Option<(&'a Type, &'a Pat)> {
+    first_arg
+        .map(|first_arg| {
+            let first_arg = match first_arg {
+                FnArg::Typed(arg) => arg,
+                _ => unreachable!(),
+            };
+
+            // check if any parameter types are this first argument
+            if parameter_types
+                .iter()
+                .any(|param| param.pat == first_arg.pat)
+            {
+                None
+            } else {
+                Some((first_arg.ty.as_ref(), first_arg.pat.as_ref()))
+            }
+        })
+        .flatten()
+        .map(|(ty, pat)| {
+            let ty = match ty {
+                Type::Reference(reference) => &reference.elem,
+                x => abort!(x.span(), "context input must be a reference";
+
+                    help = "change the type of the first function parameter to be a mutable reference";
+                ),
+            };
+
+            (ty.as_ref(), pat)
+        })
+}
+
+fn generate_into_root_node(
+    usage: &Usage,
+    parameters: &[&PatType],
+    ctx_type: Option<(&Type, &Pat)>,
+    block: &Block,
+) -> TokenStream {
+    let mut statements = vec![];
+
+    let root_literal = &usage.root_literal;
+    statements.push(quote! {
+        let mut root = lieutenant::CommandNode {
+            kind: lieutenant::CommandNodeKind::Literal(#root_literal.into()),
+            next: vec![],
+            exec: None,
+        };
+
+        let mut current = &mut root;
+    });
+
+    let ctx_param = match ctx_type {
+        Some((t, _)) => quote! { #t },
+        None => quote! { C },
+    };
+
+    let mut i = 0;
+    for argument in &usage.arguments {
+        let node = match argument {
+            Argument::Parameter { .. } | Argument::OptionalParameter { .. } => {
+                let argument_type = parameters[i];
+
+                let ty = &argument_type.ty;
+                i += 1;
+
+                quote! {
+                    lieutenant::CommandNode::<_> {
+                        kind: lieutenant::CommandNodeKind::Parser
+                            (Box::new(<<#ty as lieutenant::ArgumentKind<#ctx_param>>::Checker
+                            as lieutenant::ArgumentChecker<#ctx_param>>::default())),
+                        next: vec![],
+                        exec: None,
+                    }
+                }
+            }
+            Argument::Literal { value } => {
+                quote! {
+                    lieutenant::CommandNode::<_> {
+                        kind: lieutenant::CommandNodeKind::Literal(#value.into()),
+                        next: vec![],
+                        exec: None,
+                    }
+                }
+            }
+        };
+
+        statements.push(quote! {
+            current.next.push(#node);
+            current = &mut current.next[0];
+        });
+    }
+
+    let mut parse_args = vec![];
+
+    let mut i = 1;
+    for argument in &usage.arguments {
+        match argument {
+            Argument::Parameter { .. } | Argument::OptionalParameter { .. } => {
+                let parameter = parameters[i - 1];
+                let ident = &parameter.pat;
+                let ty = &parameter.ty;
+                let ctx_ident = match ctx_type {
+                    Some((_, ident)) => quote! { #ident },
+                    None => quote! { _ctx },
+                };
+
+                parse_args.push(quote! {
+                    let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
+                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident,
+                    args[#i]).unwrap();
+                });
+
+                i += 1;
+            }
+            _ => (),
+        }
+    }
+
+    let ctx_type = match ctx_type {
+        Some((t, name)) => quote! { #name: &mut #t },
+        None => quote! { _ctx: &mut C },
+    };
+
+    let res = quote! {
+        #(#statements)*
+
+        current.next.push(lieutenant::CommandNode::<_> {
+            kind: lieutenant::CommandNodeKind::<_>::Literal("".into()),
+            exec: Some(Box::new(|#ctx_type, args| {
+                use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
+                #(#parse_args)*
+                #block
+            })),
+            next: vec![],
+        });
+
+        root
+    };
+    res
 }

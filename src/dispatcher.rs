@@ -16,18 +16,18 @@ pub enum RegisterError {
 struct NodeKey(usize);
 
 /// Data structure used to dispatch commands.
-pub struct CommandDispatcher {
-    nodes: Slab<Node>,
+pub struct CommandDispatcher<C> {
+    nodes: Slab<Node<C>>,
     root: NodeKey,
 }
 
-impl Default for CommandDispatcher {
+impl<C> Default for CommandDispatcher<C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl CommandDispatcher {
+impl<C> CommandDispatcher<C> {
     /// Creates a new `CommandDispatcher` with no registered commands.
     pub fn new() -> Self {
         let mut nodes = Slab::new();
@@ -37,7 +37,10 @@ impl CommandDispatcher {
     }
 
     /// Registers a command to this `CommandDispatcher`.
-    pub fn register(&mut self, command: impl Command) -> Result<(), RegisterError> {
+    pub fn register(&mut self, command: impl Command<C>) -> Result<(), RegisterError>
+    where
+        C: 'static,
+    {
         self.append_node(self.root, command.into_root_node())
     }
 
@@ -46,7 +49,10 @@ impl CommandDispatcher {
     /// # Panics
     /// Panics if overlapping commands are detected. Use `register`
     /// to handle this error.
-    pub fn with(mut self, command: impl Command) -> Self {
+    pub fn with(mut self, command: impl Command<C>) -> Self
+    where
+        C: 'static,
+    {
         self.register(command).unwrap();
         self
     }
@@ -54,7 +60,7 @@ impl CommandDispatcher {
     /// Dispatches a command. Returns whether a command was executed.
     ///
     /// Unicode characters are currently not supported. This may be fixed in the future.
-    pub fn dispatch(&self, command: &str) -> bool {
+    pub fn dispatch(&self, ctx: &mut C, command: &str) -> bool {
         let parsed = Self::parse_into_arguments(command);
 
         let mut current_node = self.root;
@@ -68,7 +74,7 @@ impl CommandDispatcher {
                 let kind = &self.nodes[next.0].kind;
 
                 match kind {
-                    NodeKind::Parser(parser) => parser.satisfies(argument),
+                    NodeKind::Parser(parser) => parser.satisfies(ctx, argument),
                     NodeKind::Literal(lit) => lit == argument,
                     NodeKind::Root => unreachable!("root NodeKind outside the root node?"),
                 }
@@ -80,7 +86,7 @@ impl CommandDispatcher {
         }
 
         if let Some(exec) = &self.nodes[current_node.0].exec {
-            exec(&parsed);
+            exec(ctx, &parsed);
             true
         } else {
             false
@@ -95,8 +101,11 @@ impl CommandDispatcher {
     fn append_node(
         &mut self,
         dispatcher_current: NodeKey,
-        cmd_current: CommandNode,
-    ) -> Result<(), RegisterError> {
+        cmd_current: CommandNode<C>,
+    ) -> Result<(), RegisterError>
+    where
+        C: 'static,
+    {
         if let Some(exec) = cmd_current.exec {
             let node = &mut self.nodes[dispatcher_current.0];
 
@@ -143,15 +152,24 @@ impl CommandDispatcher {
 }
 
 /// Node on the command graph.
-#[derive(Default)]
-struct Node {
+struct Node<C> {
     next: SmallVec<[NodeKey; 4]>,
-    kind: NodeKind,
-    exec: Option<Box<dyn Fn(&[&str])>>,
+    kind: NodeKind<C>,
+    exec: Option<Box<dyn Fn(&mut C, &[&str])>>,
 }
 
-impl From<CommandNodeKind> for Node {
-    fn from(node: CommandNodeKind) -> Self {
+impl<C> Default for Node<C> {
+    fn default() -> Self {
+        Self {
+            next: SmallVec::new(),
+            kind: NodeKind::<C>::default(),
+            exec: None,
+        }
+    }
+}
+
+impl<C> From<CommandNodeKind<C>> for Node<C> {
+    fn from(node: CommandNodeKind<C>) -> Self {
         Node {
             next: SmallVec::new(),
             kind: match node {
@@ -163,14 +181,17 @@ impl From<CommandNodeKind> for Node {
     }
 }
 
-enum NodeKind {
+enum NodeKind<C> {
     Literal(Cow<'static, str>),
-    Parser(Box<dyn ArgumentChecker>),
+    Parser(Box<dyn ArgumentChecker<C>>),
     Root,
 }
 
-impl PartialEq<CommandNodeKind> for NodeKind {
-    fn eq(&self, other: &CommandNodeKind) -> bool {
+impl<C> PartialEq<CommandNodeKind<C>> for NodeKind<C>
+where
+    C: 'static,
+{
+    fn eq(&self, other: &CommandNodeKind<C>) -> bool {
         match (self, other) {
             (NodeKind::Literal(this), CommandNodeKind::Literal(other)) => this.eq(other),
             (NodeKind::Parser(this), CommandNodeKind::Parser(other)) => this.equals(other),
@@ -179,7 +200,7 @@ impl PartialEq<CommandNodeKind> for NodeKind {
     }
 }
 
-impl Default for NodeKind {
+impl<C> Default for NodeKind<C> {
     fn default() -> Self {
         NodeKind::Root
     }
