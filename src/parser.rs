@@ -50,6 +50,8 @@ pub trait ArgumentChecker<C>: Any {
     fn default() -> Self
     where
         Self: Sized;
+
+    fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
 }
 
 pub trait ArgumentParser<C> {
@@ -86,7 +88,7 @@ pub mod parsers {
 
     impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
     where
-        T: FromStr + 'static,
+        T: FromStr + Clone + 'static,
     {
         fn satisfies(&self, _ctx: &C, input: &mut Input) -> bool {
             let head = input.head(" ");
@@ -102,6 +104,10 @@ pub mod parsers {
             Self: Sized,
         {
             <Self as Default>::default()
+        }
+
+        fn box_clone(&self) -> Box<dyn ArgumentChecker<C>> {
+            Box::new(self.clone())
         }
     }
 

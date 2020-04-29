@@ -1,4 +1,4 @@
-use crate::{ArgumentChecker, Command, CommandNode, CommandNodeKind, CommandMeta, Input};
+use crate::{Argument, ArgumentChecker, Command, CommandSpec, Input};
 use slab::Slab;
 use smallvec::SmallVec;
 use std::borrow::Cow;
@@ -19,7 +19,7 @@ struct NodeKey(usize);
 pub struct CommandDispatcher<C> {
     nodes: Slab<Node<C>>,
     root: NodeKey,
-    metas: Vec<CommandMeta>
+    commands: Vec<CommandSpec<C>>,
 }
 
 impl<C> Default for CommandDispatcher<C> {
@@ -33,9 +33,13 @@ impl<C> CommandDispatcher<C> {
     pub fn new() -> Self {
         let mut nodes = Slab::new();
         let root = NodeKey(nodes.insert(Node::default()));
-        let metas = Vec::new();
+        let commands: Vec<CommandSpec<C>> = Vec::new();
 
-        Self { nodes, root, metas }
+        Self {
+            nodes,
+            root,
+            commands,
+        }
     }
 
     /// Registers a command to this `CommandDispatcher`.
@@ -43,8 +47,54 @@ impl<C> CommandDispatcher<C> {
     where
         C: 'static,
     {
-        self.metas.push(command.meta());
-        self.append_node(self.root, command.into_root_node())
+        let spec = command.build();
+
+        let mut arguments = spec.arguments.iter();
+
+        let mut current_node_key = &self.root;
+
+        'arguments: while let Some(argument) = arguments.next() {
+            let current_node = &self.nodes[current_node_key.0];
+            for next_node_key in &current_node.next {
+                let next_node = &self.nodes[next_node_key.0];
+                match (argument, &next_node.kind) {
+                    (Argument::Literal { value }, NodeKind::Literal(node_value))
+                        if value == node_value => {
+                            current_node_key = next_node_key;
+                            continue 'arguments;
+                        }
+                    (Argument::Parser { checker, .. }, NodeKind::Parser(node_checker))
+                        if checker.equals(node_checker) => {
+                            current_node_key = next_node_key;
+                            continue 'arguments;
+                        }
+                    (_, NodeKind::Root) => panic!("?"),
+                    _ => continue,
+                }
+            }
+        }
+
+        let mut current_node_key = current_node_key.clone();
+
+        while let Some(argument) = arguments.next() {
+            let next_node = Node::from(argument.clone());
+            let next_node_key = NodeKey(self.nodes.insert(next_node));
+            let current_node = &mut self.nodes[current_node_key.0.clone()];
+            current_node.next.push(next_node_key.clone());
+            current_node_key = next_node_key;
+        }
+
+        let mut current_node = &mut self.nodes[current_node_key.0];
+
+        if current_node.exec.is_some() {
+            return Err(RegisterError::OverlappingCommands);
+        }
+
+        current_node.exec = Some(spec.exec.clone());
+
+        self.commands.push(spec);
+
+        Ok(())
     }
 
     /// Method-chaining function to register a command.
@@ -73,93 +123,41 @@ impl<C> CommandDispatcher<C> {
         while !input.empty() {
             // try to find a node satisfying the argument
             let node = &self.nodes[current_node.0];
-            
+
             // TODO: optimize linear search using a hash-array mapped trie
-            if let Some((next, next_input)) = node.next.iter().filter_map(|next| {
-                let kind = &self.nodes[next.0].kind;
-                let mut input = input.clone();
+            if let Some((next, next_input)) = node
+                .next
+                .iter()
+                .filter_map(|next| {
+                    let kind = &self.nodes[next.0].kind;
+                    let mut input = input.clone();
 
-                &input;
-
-                if match kind {
-                    NodeKind::Parser(parser) => parser.satisfies(ctx, &mut input),
-                    NodeKind::Literal(lit) => lit == input.head(" "),
-                    NodeKind::Root => unreachable!("root NodeKind outside the root node?"),
-                } {
-                    Some((next, input))
-                } else {
-                    None
-                }
-            }).next() {
+                    if match kind {
+                        NodeKind::Parser(parser) => parser.satisfies(ctx, &mut input),
+                        NodeKind::Literal(lit) => lit == input.head(" "),
+                        NodeKind::Root => unreachable!("root NodeKind outside the root node?"),
+                    } {
+                        Some((next, input))
+                    } else {
+                        None
+                    }
+                })
+                .next()
+            {
                 current_node = *next;
                 input = next_input;
+            } else if let Some(exec) = &self.nodes[current_node.0].exec {
+                exec(ctx, command);
+                return true;
             } else {
                 return false;
             }
         }
-
-        if let Some(exec) = &self.nodes[current_node.0].exec {
-            exec(ctx, command);
-            true
-        } else {
-            false
-        }
+        false
     }
 
-    pub fn command_meta(&self) -> impl Iterator<Item = &CommandMeta> {
-        self.metas.iter()
-    }
-
-    fn append_node(
-        &mut self,
-        dispatcher_current: NodeKey,
-        cmd_current: CommandNode<C>,
-    ) -> Result<(), RegisterError>
-    where
-        C: 'static,
-    {
-        if let Some(exec) = cmd_current.exec {
-            let node = &mut self.nodes[dispatcher_current.0];
-
-            if let NodeKind::Root = node.kind {
-                return Err(RegisterError::ExecutableRoot);
-            }
-
-            match node.exec {
-                Some(_) => return Err(RegisterError::OverlappingCommands),
-                None => node.exec = Some(exec),
-            }
-        }
-
-        let cmd_current_kind = &cmd_current.kind;
-
-        // Find a node which has the same parser type as `cmd_current`,
-        // or add it if it doesn't exist.
-        let found = self.nodes[dispatcher_current.0]
-            .next
-            .iter()
-            .find(|key| &self.nodes[key.0].kind == cmd_current_kind)
-            .copied();
-
-        let found = if let Some(found) = found {
-            found
-        } else {
-            // Create new node, then append.
-            let new_node = self.nodes.insert(Node::from(cmd_current.kind));
-
-            self.nodes[dispatcher_current.0]
-                .next
-                .push(NodeKey(new_node));
-
-            NodeKey(new_node)
-        };
-        cmd_current
-            .next
-            .into_iter()
-            .map(|next| self.append_node(found, next))
-            .collect::<Result<(), RegisterError>>()?;
-
-        Ok(())
+    pub fn commands(&self) -> impl Iterator<Item = &CommandSpec<C>> {
+        self.commands.iter()
     }
 }
 
@@ -180,13 +178,13 @@ impl<C> Default for Node<C> {
     }
 }
 
-impl<C> From<CommandNodeKind<C>> for Node<C> {
-    fn from(node: CommandNodeKind<C>) -> Self {
+impl<C> From<Argument<C>> for Node<C> {
+    fn from(node: Argument<C>) -> Self {
         Node {
             next: SmallVec::new(),
             kind: match node {
-                CommandNodeKind::Literal(lit) => NodeKind::Literal(lit),
-                CommandNodeKind::Parser(parser) => NodeKind::Parser(parser),
+                Argument::Literal { value } => NodeKind::Literal(value),
+                Argument::Parser { checker, .. } => NodeKind::Parser(checker),
             },
             exec: None,
         }
@@ -199,14 +197,14 @@ enum NodeKind<C> {
     Root,
 }
 
-impl<C> PartialEq<CommandNodeKind<C>> for NodeKind<C>
+impl<C> PartialEq<Argument<C>> for NodeKind<C>
 where
     C: 'static,
 {
-    fn eq(&self, other: &CommandNodeKind<C>) -> bool {
+    fn eq(&self, other: &Argument<C>) -> bool {
         match (self, other) {
-            (NodeKind::Literal(this), CommandNodeKind::Literal(other)) => this.eq(other),
-            (NodeKind::Parser(this), CommandNodeKind::Parser(other)) => this.equals(other),
+            (NodeKind::Literal(this), Argument::Literal { value: other}) => this.eq(other),
+            (NodeKind::Parser(this), Argument::Parser { checker: other, .. }) => this.equals(other),
             _ => false,
         }
     }

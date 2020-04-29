@@ -139,20 +139,20 @@ fn help_command() {
     let mut dispatcher = CommandDispatcher::new();
 
     #[command(
-        usage = "/help <page>",
+        usage = "help <page>",
         description = "Shows the descriptions and usages of all commands."
     )]
     fn help(state: &mut State, page: u32) {
         state.usages = state
             .dispatcher
-            .command_meta()
+            .commands()
             .skip(page as usize * 10)
             .take(10)
-            .map(|meta| meta.usage.clone())
+            .map(|meta| meta.arguments.iter().map(|_| "").collect())
             .collect();
         state.descriptions = state
             .dispatcher
-            .command_meta()
+            .commands()
             .skip(page as usize * 10)
             .take(10)
             .filter_map(|meta| meta.description.clone())
