@@ -1,4 +1,4 @@
-use crate::{ArgumentChecker, Command, CommandNode, CommandNodeKind};
+use crate::{ArgumentChecker, Command, CommandNode, CommandNodeKind, CommandMeta, Input};
 use slab::Slab;
 use smallvec::SmallVec;
 use std::borrow::Cow;
@@ -19,6 +19,7 @@ struct NodeKey(usize);
 pub struct CommandDispatcher<C> {
     nodes: Slab<Node<C>>,
     root: NodeKey,
+    metas: Vec<CommandMeta>
 }
 
 impl<C> Default for CommandDispatcher<C> {
@@ -32,8 +33,9 @@ impl<C> CommandDispatcher<C> {
     pub fn new() -> Self {
         let mut nodes = Slab::new();
         let root = NodeKey(nodes.insert(Node::default()));
+        let metas = Vec::new();
 
-        Self { nodes, root }
+        Self { nodes, root, metas }
     }
 
     /// Registers a command to this `CommandDispatcher`.
@@ -41,6 +43,7 @@ impl<C> CommandDispatcher<C> {
     where
         C: 'static,
     {
+        self.metas.push(command.meta());
         self.append_node(self.root, command.into_root_node())
     }
 
@@ -61,41 +64,50 @@ impl<C> CommandDispatcher<C> {
     ///
     /// Unicode characters are currently not supported. This may be fixed in the future.
     pub fn dispatch(&self, ctx: &mut C, command: &str) -> bool {
-        let parsed = Self::parse_into_arguments(command);
+        // let parsed = Self::parse_into_arguments(command);
 
         let mut current_node = self.root;
 
-        for argument in &parsed {
+        let mut input = Input::new(command);
+
+        while !input.empty() {
             // try to find a node satisfying the argument
             let node = &self.nodes[current_node.0];
-
+            
             // TODO: optimize linear search using a hash-array mapped trie
-            if let Some(next) = node.next.iter().find(|next| {
+            if let Some((next, next_input)) = node.next.iter().filter_map(|next| {
                 let kind = &self.nodes[next.0].kind;
+                let mut input = input.clone();
 
-                match kind {
-                    NodeKind::Parser(parser) => parser.satisfies(ctx, argument),
-                    NodeKind::Literal(lit) => lit == argument,
+                &input;
+
+                if match kind {
+                    NodeKind::Parser(parser) => parser.satisfies(ctx, &mut input),
+                    NodeKind::Literal(lit) => lit == input.head(" "),
                     NodeKind::Root => unreachable!("root NodeKind outside the root node?"),
+                } {
+                    Some((next, input))
+                } else {
+                    None
                 }
-            }) {
+            }).next() {
                 current_node = *next;
+                input = next_input;
             } else {
                 return false;
             }
         }
 
         if let Some(exec) = &self.nodes[current_node.0].exec {
-            exec(ctx, &parsed);
+            exec(ctx, command);
             true
         } else {
             false
         }
     }
 
-    fn parse_into_arguments(command: &str) -> SmallVec<[&str; 4]> {
-        // TODO: proper parser with support for strings in quotes
-        command.split(" ").collect()
+    pub fn command_meta(&self) -> impl Iterator<Item = &CommandMeta> {
+        self.metas.iter()
     }
 
     fn append_node(
@@ -155,7 +167,7 @@ impl<C> CommandDispatcher<C> {
 struct Node<C> {
     next: SmallVec<[NodeKey; 4]>,
     kind: NodeKind<C>,
-    exec: Option<Box<dyn Fn(&mut C, &[&str])>>,
+    exec: Option<Box<dyn Fn(&mut C, &str)>>,
 }
 
 impl<C> Default for Node<C> {

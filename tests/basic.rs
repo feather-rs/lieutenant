@@ -125,3 +125,55 @@ fn command_macro() {
     assert_eq!(state.x, 29);
     assert_eq!(state.player.as_str(), "twenty-sixPLAYER");
 }
+
+#[test]
+fn help_command() {
+    use std::borrow::Cow;
+    use std::rc::Rc;
+    struct State {
+        pub dispatcher: Rc<CommandDispatcher<Self>>,
+        pub usages: Vec<Cow<'static, str>>,
+        pub descriptions: Vec<Cow<'static, str>>,
+    }
+
+    let mut dispatcher = CommandDispatcher::new();
+
+    #[command(
+        usage = "/help <page>",
+        description = "Shows the descriptions and usages of all commands."
+    )]
+    fn help(state: &mut State, page: u32) {
+        state.usages = state
+            .dispatcher
+            .command_meta()
+            .skip(page as usize * 10)
+            .take(10)
+            .map(|meta| meta.usage.clone())
+            .collect();
+        state.descriptions = state
+            .dispatcher
+            .command_meta()
+            .skip(page as usize * 10)
+            .take(10)
+            .filter_map(|meta| meta.description.clone())
+            .collect();
+    }
+
+    dispatcher.register(help).unwrap();
+
+    let dispatcher = Rc::new(dispatcher);
+
+    let mut ctx = State {
+        dispatcher: Rc::clone(&dispatcher),
+        usages: vec![],
+        descriptions: vec![],
+    };
+
+    assert!(dispatcher.dispatch(&mut ctx, "help 0"));
+    assert_eq!(ctx.usages, vec!["/help <page>"]);
+    assert_eq!(ctx.descriptions, vec!["Shows the descriptions and usages of all commands."]);
+
+    assert!(dispatcher.dispatch(&mut ctx, "help 1"));
+    assert!(ctx.usages.is_empty());
+    assert!(ctx.descriptions.is_empty());
+}

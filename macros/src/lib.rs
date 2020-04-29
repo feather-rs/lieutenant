@@ -9,6 +9,8 @@ use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, 
 #[derive(Debug, FromMeta)]
 struct Args {
     usage: String,
+    #[darling(default)]
+    description: Option<String>
 }
 
 #[derive(Debug)]
@@ -76,6 +78,13 @@ pub fn command(
 
     let into_root_node = generate_into_root_node(&usage, &parameters, ctx_type, &input.block);
     let visibility = &input.vis;
+
+    let usage = args.usage;
+    let description = match args.description {
+        Some(description) => quote! { Some(#description.into()) },
+        None => quote! { None },
+    };
+
     let tokens = quote! {
         #[allow(non_camel_case_types)]
         #visibility struct #command_ident;
@@ -83,6 +92,13 @@ pub fn command(
         #impl_header {
             fn into_root_node(self) -> lieutenant::CommandNode<#ctx_actual_type> {
                 #into_root_node
+            }
+
+            fn meta(&self) -> lieutenant::CommandMeta {
+                lieutenant::CommandMeta {
+                    usage: #usage.into(),
+                    description: #description,
+                }
             }
         }
     };
@@ -336,11 +352,11 @@ fn generate_into_root_node(
 
     let mut parse_args = vec![];
 
-    let mut i = 1;
-    for argument in &usage.arguments {
+    let mut i = 0;
+    for argument in usage.arguments.iter() {
         match argument {
             Argument::Parameter { .. } | Argument::OptionalParameter { .. } => {
-                let parameter = parameters[i - 1];
+                let parameter = parameters[i];
                 let ident = &parameter.pat;
                 let ty = &parameter.ty;
                 let ctx_ident = match ctx_type {
@@ -350,13 +366,12 @@ fn generate_into_root_node(
 
                 parse_args.push(quote! {
                     let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
-                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident,
-                    args[#i]).unwrap();
+                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut input).unwrap();
                 });
 
                 i += 1;
-            }
-            _ => (),
+            },
+            Argument::Literal { .. } => parse_args.push(quote! { input.head(" "); }),
         }
     }
 
@@ -372,6 +387,8 @@ fn generate_into_root_node(
             kind: lieutenant::CommandNodeKind::<_>::Literal("".into()),
             exec: Some(Box::new(|#ctx_type, args| {
                 use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
+                let mut input = lieutenant::Input::new(args);
+                input.head(" ");
                 #(#parse_args)*
                 #block
             })),

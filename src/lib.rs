@@ -2,10 +2,10 @@ mod command;
 mod dispatcher;
 mod parser;
 
-pub use command::{Command, CommandNode, CommandNodeKind};
+pub use command::{Command, CommandNode, CommandNodeKind, CommandMeta};
 pub use dispatcher::CommandDispatcher;
 pub use lieutenant_macros::command;
-pub use parser::{parsers, ArgumentChecker, ArgumentKind, ArgumentParser};
+pub use parser::{parsers, ArgumentChecker, ArgumentKind, ArgumentParser, Input};
 
 /// Denotes a type that may be passed to commands as input.
 pub trait Context {}

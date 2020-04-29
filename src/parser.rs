@@ -1,7 +1,45 @@
 use std::any::Any;
 
+#[derive(Clone, Debug)]
+pub struct Input<'a> {
+    cursor: usize,
+    value: &'a str,
+}
+
+impl<'a> Input<'a> {
+    pub fn new(input: &'a str) -> Self {
+        Input {
+            cursor: 0,
+            value: input,
+        }
+    }
+
+    pub fn head(&mut self, pattern: &str) -> &'a str {
+        if !self.empty() {
+            let (_, tail) = self.value.split_at(self.cursor);
+            let head = tail.split(pattern).next().unwrap_or("");
+            self.cursor += head.len() + pattern.len();
+            head   
+        } else {
+            ""
+        }
+    }
+
+    pub fn tail(&self) -> &str {
+        if !self.empty() {
+            self.value.split_at(self.cursor).1
+        } else {
+            ""
+        }
+    }
+
+    pub fn empty(&self) -> bool {
+        !(self.cursor < self.value.len())
+    }
+}
+
 pub trait ArgumentChecker<C>: Any {
-    fn satisfies(&self, ctx: &C, input: &str) -> bool;
+    fn satisfies(&self, ctx: &C, input: &mut Input) -> bool;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -17,7 +55,7 @@ pub trait ArgumentChecker<C>: Any {
 pub trait ArgumentParser<C> {
     type Output;
 
-    fn parse(&self, ctx: &mut C, input: &str) -> anyhow::Result<Self::Output>;
+    fn parse(&self, ctx: &mut C, input: &mut Input) -> anyhow::Result<Self::Output>;
     fn default() -> Self
     where
         Self: Sized;
@@ -50,8 +88,9 @@ pub mod parsers {
     where
         T: FromStr + 'static,
     {
-        fn satisfies(&self, _ctx: &C, input: &str) -> bool {
-            T::from_str(input).is_ok()
+        fn satisfies(&self, _ctx: &C, input: &mut Input) -> bool {
+            let head = input.head(" ");
+            T::from_str(head).is_ok()
         }
 
         fn equals(&self, other: &dyn Any) -> bool {
@@ -86,8 +125,9 @@ pub mod parsers {
     {
         type Output = T;
 
-        fn parse(&self, _ctx: &mut C, input: &str) -> anyhow::Result<Self::Output> {
-            T::from_str(input).map_err(anyhow::Error::from)
+        fn parse(&self, _ctx: &mut C, input: &mut Input) -> anyhow::Result<Self::Output> {
+            let head = input.head(" ");
+            Ok(T::from_str(head)?)
         }
 
         fn default() -> Self
@@ -110,4 +150,28 @@ pub mod parsers {
     }
 
     from_str_argument_kind!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, String, bool);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Input;
+    #[test]
+    fn input() {
+        let input = Input::new("foo bar");
+        {
+            let mut input = input.clone();
+            let foo = input.head(" ");
+            
+            assert_eq!(foo, "foo");
+            assert_eq!(input.tail(), "bar");
+            assert!(!input.empty());
+
+            let bar = input.head(" ");
+            assert_eq!(bar, "bar");
+            assert!(input.empty());
+            assert_eq!(input.head(" "), "")
+        }
+
+        assert_eq!(input.tail(), "foo bar");
+    }
 }
