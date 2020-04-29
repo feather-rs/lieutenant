@@ -1,6 +1,9 @@
-use lieutenant::{CommandBuilder, CommandDispatcher};
+use lieutenant::{command, CommandBuilder, CommandDispatcher};
+use once_cell::sync::Lazy;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Mutex;
 
 // Using Rc until context inputs are supported
 
@@ -76,4 +79,50 @@ fn multiple_commands() {
 
     assert!(dispatcher.dispatch("cmd2 new_string"));
     assert_eq!(y2.borrow().as_str(), "new_string");
+}
+
+static X: AtomicI32 = AtomicI32::new(0);
+static PLAYER: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
+
+#[command(usage = "/test <x>")]
+fn test(x: i32) {
+    X.store(x, Ordering::SeqCst);
+}
+
+#[command(usage = "/foo <player>")]
+fn foo_a_player(player: String) {
+    PLAYER.lock().unwrap().push_str(&player);
+}
+
+#[command(usage = "/bar <player> <x>")]
+fn foo_a_player_then_bar_an_x(player: String, x: i32) {
+    X.store(x + 1, Ordering::SeqCst);
+    PLAYER.lock().unwrap().push_str(&player);
+}
+
+#[test]
+fn command_macro() {
+    let dispatcher = CommandDispatcher::new()
+        .with(test())
+        .with(foo_a_player())
+        .with(foo_a_player_then_bar_an_x());
+
+    assert!(!dispatcher.dispatch("false command"));
+
+    assert!(dispatcher.dispatch("test 25"));
+    assert_eq!(X.load(Ordering::SeqCst), 25);
+
+    assert!(dispatcher.dispatch("foo twenty-six"));
+    assert_eq!(PLAYER.lock().unwrap().as_str(), "twenty-six");
+
+    assert!(!dispatcher.dispatch("test"));
+    assert!(!dispatcher.dispatch("test not-a-number"));
+
+    assert!(!dispatcher.dispatch("bar"));
+    assert!(!dispatcher.dispatch("bar player"));
+    assert!(!dispatcher.dispatch("bar player four"));
+    assert!(dispatcher.dispatch("bar PLAYER 28"));
+
+    assert_eq!(X.load(Ordering::SeqCst), 29);
+    assert_eq!(PLAYER.lock().unwrap().as_str(), "twenty-sixPLAYER");
 }

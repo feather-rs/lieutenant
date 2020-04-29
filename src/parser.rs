@@ -9,7 +9,9 @@ pub trait ArgumentParser {
     type Output;
 
     fn parse(&self, input: &str) -> anyhow::Result<Self::Output>;
-    fn default() -> Self where Self: Sized;
+    fn default() -> Self
+    where
+        Self: Sized;
 }
 
 pub trait ArgumentKind: Sized {
@@ -44,7 +46,7 @@ macro_rules! from_str_checker {
                 fn parse(&self, input: &str) -> anyhow::Result<Self::Output> {
                     <$ty as std::str::FromStr>::from_str(input).map_err(anyhow::Error::from)
                 }
-                
+
                 fn default() -> Self {
                     <Self as Default>::default()
                 }

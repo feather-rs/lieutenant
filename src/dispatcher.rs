@@ -41,6 +41,16 @@ impl CommandDispatcher {
         self.append_node(self.root, command.into_root_node())
     }
 
+    /// Method-chaining function to register a command.
+    ///
+    /// # Panics
+    /// Panics if overlapping commands are detected. Use `register`
+    /// to handle this error.
+    pub fn with(mut self, command: impl Command) -> Self {
+        self.register(command).unwrap();
+        self
+    }
+
     /// Dispatches a command. Returns whether a command was executed.
     ///
     /// Unicode characters are currently not supported. This may be fixed in the future.
@@ -102,8 +112,8 @@ impl CommandDispatcher {
 
         let cmd_current_kind = &cmd_current.kind;
 
-        // Traverse the graph until we find a node with no `next` nodes
-        // equal to the current node.
+        // Find a node which has the same parser type as `cmd_current`,
+        // or add it if it doesn't exist.
         let found = self.nodes[dispatcher_current.0]
             .next
             .iter()
