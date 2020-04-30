@@ -7,15 +7,8 @@ pub struct Input<'a> {
 }
 
 impl<'a> Input<'a> {
-    pub fn new(input: &'a str) -> Self {
-        Input {
-            cursor: 0,
-            value: input,
-        }
-    }
-
     pub fn head(&mut self, pattern: &str) -> &'a str {
-        if !self.empty() {
+        if !self.is_empty() {
             let (_, tail) = self.value.split_at(self.cursor);
             let head = tail.split(pattern).next().unwrap_or("");
             self.cursor += head.len() + pattern.len();
@@ -26,15 +19,24 @@ impl<'a> Input<'a> {
     }
 
     pub fn tail(&self) -> &str {
-        if !self.empty() {
+        if !self.is_empty() {
             self.value.split_at(self.cursor).1
         } else {
             ""
         }
     }
 
-    pub fn empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         !(self.cursor < self.value.len())
+    }
+}
+
+impl<'a> From<&'a str> for Input<'a> {
+    fn from(input: &'a str) -> Self {
+        Self {
+            cursor: 0,
+            value: input,
+        }
     }
 }
 
@@ -163,18 +165,18 @@ mod tests {
     use super::Input;
     #[test]
     fn input() {
-        let input = Input::new("foo bar");
+        let input = Input::from("foo bar");
         {
             let mut input = input.clone();
             let foo = input.head(" ");
             
             assert_eq!(foo, "foo");
             assert_eq!(input.tail(), "bar");
-            assert!(!input.empty());
+            assert!(!input.is_empty());
 
             let bar = input.head(" ");
             assert_eq!(bar, "bar");
-            assert!(input.empty());
+            assert!(input.is_empty());
             assert_eq!(input.head(" "), "")
         }
 

@@ -357,7 +357,7 @@ fn generate_command_spec(
             description: #description,
             exec: Box::new(|#ctx_type, args| {
                 use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
-                let mut input = lieutenant::Input::new(args);
+                let mut input = lieutenant::Input::from(args);
                 #(#parse_args)*
                 #block
             }),

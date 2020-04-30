@@ -1,7 +1,7 @@
-use crate::ArgumentChecker;
+use crate::{ArgumentChecker, Context};
 use std::borrow::Cow;
 
-pub trait Command<C> {
+pub trait Command<C: Context> {
     /// Returns the root node for parsing this command.
     fn build(self) -> CommandSpec<C>;
 }
@@ -30,8 +30,29 @@ impl<C> Clone for Argument<C> {
     }
 }
 
-pub struct CommandSpec<C> {
+impl<C> PartialEq for Argument<C> 
+where
+    C: 'static,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Argument::Literal { value }, Argument::Literal { value: other }) => value == other,
+            (Argument::Parser { checker, .. }, Argument::Parser { checker: other, .. }) => {
+                checker.equals(other)
+            }
+            (_, _) => false,
+        }
+    }
+}
+
+pub struct CommandSpec<C: Context> {
     pub arguments: Vec<Argument<C>>,
     pub description: Option<Cow<'static, str>>,
-    pub exec: Box<fn(&mut C, &str)>,
+    pub exec: Box<fn(&mut C, &str) -> Result<C::Ok, C::Error>>,
+}
+
+impl<C: Context> Command<C> for CommandSpec<C> {
+    fn build(self) -> CommandSpec<C> {
+        self
+    }
 }
