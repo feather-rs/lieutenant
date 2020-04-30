@@ -58,6 +58,8 @@ pub trait ArgumentKind<C: Context>: Sized + Send + Sync {
 pub mod parsers {
     use super::*;
     use std::marker::PhantomData;
+    use std::num::*;
+    use std::path::PathBuf;
     use std::str::FromStr;
 
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -146,7 +148,7 @@ pub mod parsers {
     }
 
     macro_rules! from_str_argument_kind {
-        ($($ty:ty),*) => {
+        ($($ty:ty,)*) => {
             $(
                 impl <C: Context> ArgumentKind<C> for $ty {
                     type Checker = FromStrChecker<Self>;
@@ -156,5 +158,34 @@ pub mod parsers {
         }
     }
 
-    from_str_argument_kind!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, String, bool);
+    from_str_argument_kind!(
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        isize,
+        u8,
+        u16,
+        u32,
+        u64,
+        usize,
+        f32,
+        f64,
+        u128,
+        String,
+        bool,
+        char,
+        NonZeroI8,
+        NonZeroI16,
+        NonZeroI32,
+        NonZeroI64,
+        NonZeroIsize,
+        NonZeroU8,
+        NonZeroU16,
+        NonZeroU32,
+        NonZeroU64,
+        NonZeroUsize,
+        PathBuf,
+    );
 }
