@@ -52,7 +52,10 @@ fn error_handling() {
     let dispatcher = CommandDispatcher::default().with(test);
 
     assert_eq!(dispatcher.dispatch(&mut State, "test 0"), Some(Ok(())));
-    assert_eq!(dispatcher.dispatch(&mut State, "test 5"), Some(Err(Error::Custom("Not zero".into()))));
+    assert_eq!(
+        dispatcher.dispatch(&mut State, "test 5"),
+        Some(Err(Error::Custom("Not zero".into())))
+    );
 }
 
 #[test]
@@ -81,7 +84,9 @@ fn multiple_args() {
         x: 690854,
         y: String::from("wrong"),
     };
-    assert!(dispatcher.dispatch(&mut state, "test14 66 string extra_literal").is_some());
+    assert!(dispatcher
+        .dispatch(&mut state, "test14 66 string extra_literal")
+        .is_some());
 
     assert_eq!(state.x, 66);
     assert_eq!(state.y.as_str(), "string");
@@ -93,7 +98,7 @@ fn multiple_commands() {
         x: i32,
         y: String,
     }
-    
+
     impl Context for State {
         type Error = Error;
         type Ok = ();
@@ -119,10 +124,14 @@ fn multiple_commands() {
     };
 
     assert!(!dispatcher.dispatch(&mut state, "cmd1 10").is_some()); // misssing extra_lit
-    assert!(dispatcher.dispatch(&mut state, "cmd1 10 extra_lit").is_some());
+    assert!(dispatcher
+        .dispatch(&mut state, "cmd1 10 extra_lit")
+        .is_some());
     assert_eq!(state.x, 10);
 
-    assert!(!dispatcher.dispatch(&mut state, "invalid command 22").is_some());
+    assert!(!dispatcher
+        .dispatch(&mut state, "invalid command 22")
+        .is_some());
 
     assert!(dispatcher.dispatch(&mut state, "cmd2 new_string").is_some());
     assert_eq!(state.y.as_str(), "new_string");
@@ -177,7 +186,9 @@ fn command_macro() {
     assert_eq!(state.player.as_str(), "twenty-six");
 
     assert!(!dispatcher.dispatch(&mut state, "test").is_some());
-    assert!(!dispatcher.dispatch(&mut state, "test not-a-number").is_some());
+    assert!(!dispatcher
+        .dispatch(&mut state, "test not-a-number")
+        .is_some());
 
     assert!(!dispatcher.dispatch(&mut state, "bar").is_some());
     assert!(!dispatcher.dispatch(&mut state, "bar player").is_some());
@@ -239,7 +250,10 @@ fn help_command() {
 
     assert!(dispatcher.dispatch(&mut ctx, "help 0").is_some());
     assert_eq!(ctx.usages, vec!["/help <page>"]);
-    assert_eq!(ctx.descriptions, vec!["Shows the descriptions and usages of all commands."]);
+    assert_eq!(
+        ctx.descriptions,
+        vec!["Shows the descriptions and usages of all commands."]
+    );
 
     assert!(dispatcher.dispatch(&mut ctx, "help 1").is_some());
     assert!(ctx.usages.is_empty());

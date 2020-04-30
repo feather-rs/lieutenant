@@ -1,7 +1,6 @@
-use crate::{Argument, ArgumentChecker, Command, CommandSpec, Input, Context};
-use std::collections::VecDeque;
-use smallvec::SmallVec;
+use crate::{command::Exec, Argument, Command, CommandSpec, Context, Input};
 use slab::Slab;
+use smallvec::SmallVec;
 
 #[derive(Debug)]
 pub enum RegisterError {
@@ -64,7 +63,7 @@ where
 
             for child_key in children {
                 let child = &self.nodes[**child_key];
-                
+
                 if argument == &&child.argument {
                     arguments.next();
                     node_key = Some(*child_key);
@@ -74,7 +73,7 @@ where
             break;
         }
 
-        while let Some(argument) = arguments.next() {
+        for argument in arguments {
             let child = Node::from(argument.clone());
             let child_key = NodeKey(self.nodes.insert(child));
 
@@ -82,7 +81,7 @@ where
                 let node = &mut self.nodes[*node_key];
                 node.children.push(child_key);
             } else {
-                self.children.push(child_key);            
+                self.children.push(child_key);
             }
 
             node_key = Some(child_key);
@@ -117,7 +116,7 @@ where
     /// Dispatches a command. Returns whether a command was executed.
     pub fn dispatch(&self, ctx: &mut C, command: &str) -> Option<Result<C::Ok, C::Error>> {
         let input = Input::from(command);
-        
+
         let mut nodes = Vec::new();
         for child_key in &self.children {
             nodes.push((input.clone(), *child_key));
@@ -129,7 +128,7 @@ where
             let node = &self.nodes[*node_key];
             let satisfies = match &node.argument {
                 Argument::Literal { value } => value == input.head(" "),
-                Argument::Parser { checker, ..} => checker.satisfies(ctx, &mut input),
+                Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input),
             };
 
             if input.is_empty() && satisfies {
@@ -138,7 +137,7 @@ where
                         ok @ Ok(_) => return Some(ok),
                         err @ Err(_) => error = Some(err),
                     }
-                } 
+                }
                 continue;
             }
 
@@ -160,14 +159,14 @@ where
 struct Node<C: Context> {
     children: SmallVec<[NodeKey; 4]>,
     argument: Argument<C>,
-    execs: Vec<Box<dyn Fn(&mut C, &str) -> Result<C::Ok, C::Error>>>,
+    execs: Vec<Exec<C>>,
 }
 
 impl<C: Context> From<Argument<C>> for Node<C> {
     fn from(argument: Argument<C>) -> Self {
         Node {
             children: Default::default(),
-            argument: argument,
+            argument,
             execs: Vec::new(),
         }
     }

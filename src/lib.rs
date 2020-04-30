@@ -2,7 +2,7 @@ mod command;
 mod dispatcher;
 mod parser;
 
-pub use command::{Command, CommandSpec, Argument};
+pub use command::{Argument, Command, CommandSpec};
 pub use dispatcher::CommandDispatcher;
 pub use lieutenant_macros::command;
 pub use parser::{parsers, ArgumentChecker, ArgumentKind, ArgumentParser, Input};

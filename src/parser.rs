@@ -12,7 +12,7 @@ impl<'a> Input<'a> {
             let (_, tail) = self.value.split_at(self.cursor);
             let head = tail.split(pattern).next().unwrap_or("");
             self.cursor += head.len() + pattern.len();
-            head   
+            head
         } else {
             ""
         }
@@ -27,7 +27,7 @@ impl<'a> Input<'a> {
     }
 
     pub fn is_empty(&self) -> bool {
-        !(self.cursor < self.value.len())
+        self.cursor >= self.value.len()
     }
 }
 
@@ -169,7 +169,7 @@ mod tests {
         {
             let mut input = input.clone();
             let foo = input.head(" ");
-            
+
             assert_eq!(foo, "foo");
             assert_eq!(input.tail(), "bar");
             assert!(!input.is_empty());

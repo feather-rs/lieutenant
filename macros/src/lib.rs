@@ -10,7 +10,7 @@ use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, 
 struct Args {
     usage: String,
     #[darling(default)]
-    description: Option<String>
+    description: Option<String>,
 }
 
 #[derive(Debug)]
@@ -75,7 +75,13 @@ pub fn command(
         quote! { C }
     };
 
-    let command_spec = generate_command_spec(&usage, args.description, &parameters, ctx_type, &input.block);
+    let command_spec = generate_command_spec(
+        &usage,
+        args.description,
+        &parameters,
+        ctx_type,
+        &input.block,
+    );
     let visibility = &input.vis;
 
     let tokens = quote! {
@@ -94,7 +100,7 @@ pub fn command(
 fn parse_usage(usage: &str) -> Usage {
     let mut arguments = vec![];
 
-    for splitted in usage.split(" ") {
+    for splitted in usage.split(' ') {
         let (first, middle) = splitted.split_at(1.min(splitted.len()));
         let (middle, last) = middle.split_at(middle.len() - 1);
         match (first, middle, last) {
@@ -110,9 +116,7 @@ fn parse_usage(usage: &str) -> Usage {
         }
     }
 
-    Usage {
-        arguments,
-    }
+    Usage { arguments }
 }
 
 fn collect_parameters<'a>(
@@ -331,7 +335,7 @@ fn generate_command_spec(
                 });
 
                 i += 1;
-            },
+            }
             Argument::Literal { .. } => parse_args.push(quote! { input.head(" "); }),
         }
     }
@@ -355,12 +359,12 @@ fn generate_command_spec(
         lieutenant::CommandSpec {
             arguments,
             description: #description,
-            exec: Box::new(|#ctx_type, args| {
+            exec: |#ctx_type, args| {
                 use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
                 let mut input = lieutenant::Input::from(args);
                 #(#parse_args)*
                 #block
-            }),
+            },
         }
     };
     res

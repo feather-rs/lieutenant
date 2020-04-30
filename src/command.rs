@@ -1,6 +1,8 @@
 use crate::{ArgumentChecker, Context};
 use std::borrow::Cow;
 
+pub type Exec<C> = fn(&mut C, &str) -> Result<<C as Context>::Ok, <C as Context>::Error>;
+
 pub trait Command<C: Context> {
     /// Returns the root node for parsing this command.
     fn build(self) -> CommandSpec<C>;
@@ -30,7 +32,7 @@ impl<C> Clone for Argument<C> {
     }
 }
 
-impl<C> PartialEq for Argument<C> 
+impl<C> PartialEq for Argument<C>
 where
     C: 'static,
 {
@@ -48,7 +50,7 @@ where
 pub struct CommandSpec<C: Context> {
     pub arguments: Vec<Argument<C>>,
     pub description: Option<Cow<'static, str>>,
-    pub exec: Box<fn(&mut C, &str) -> Result<C::Ok, C::Error>>,
+    pub exec: Exec<C>,
 }
 
 impl<C: Context> Command<C> for CommandSpec<C> {
