@@ -145,7 +145,7 @@ fn multiple_args() {
     let mut errors = Vec::new();
 
     let mut state = State {
-        x: 690854,
+        x: 690_854,
         y: String::from("wrong"),
     };
     assert!(smol::block_on(dispatcher.dispatch(
