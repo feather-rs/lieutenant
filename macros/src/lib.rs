@@ -336,7 +336,7 @@ fn generate_command_spec(
 
                 parse_args.push(quote! {
                     let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
-                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut args).unwrap();
+                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut args).await.unwrap();
                 });
 
                 i += 1;

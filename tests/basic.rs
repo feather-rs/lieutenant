@@ -35,6 +35,40 @@ fn basic_command() {
 }
 
 #[test]
+fn basic_command_parralel() {
+    use std::thread;
+    use futures::future;
+    for _ in 0..2 {
+        // A pending future is one that simply yields forever.
+        thread::spawn(|| smol::run(future::pending::<()>()));
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct State(i32);
+
+    impl Context for State {
+        type Error = Error;
+        type Ok = ();
+    }
+
+    #[command(usage = "test <x>")]
+    fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+        *ctx = State(x);
+        Ok(())
+    };
+
+    let dispatcher = CommandDispatcher::default().with(test);
+
+    let mut nodes = Vec::new();
+    let mut errors = Vec::new();
+
+    let mut x = State(0);
+    assert!(smol::run(dispatcher
+        .dispatch(&mut nodes, &mut errors, &mut x, "test 27")).is_ok());
+    assert_eq!(x, State(27));
+}
+
+#[test]
 fn error_handling() {
     #[derive(Debug, PartialEq, Eq)]
     struct State;

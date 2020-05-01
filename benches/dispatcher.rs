@@ -30,46 +30,52 @@ fn single_command(c: &mut Criterion) {
     });
 }
 
-fn single_command_prallel(c: &mut Criterion) {
-    use std::thread;
-    use thread_local::ThreadLocal;
-    use futures::future;
-    use std::cell::RefCell;
-    use std::sync::Arc;
-    for _ in 0..2 {
-        // A pending future is one that simply yields forever.
-        thread::spawn(|| smol::run(future::pending::<()>()));
-    }
+fn single_command_prallel(_c: &mut Criterion) {
+    // use std::thread;
+    // use thread_local::ThreadLocal;
+    // use futures::future;
+    // use std::cell::RefCell;
+    // use std::sync::Arc;
+    // use std::time::Duration;
+    // use smol::Task;
 
-    struct State;
-    impl Context for State {
-        type Error = Error;
-        type Ok = ();
-    }
-    #[command(usage = "command")]
-    fn command_1(_: &mut State) -> Result<(), Error> {
-        // thread::sleep(time::Duration::from_millis(1));
-        Ok(())
-    }
+    // for _ in 0..2 {
+    //     // A pending future is one that simply yields forever.
+    //     thread::spawn(|| smol::run(future::pending::<()>()));
+    // }
 
-    let mut dispatcher = CommandDispatcher::default();
-    dispatcher.register(command_1).unwrap();
+    // #[derive(Clone, Copy)]
+    // struct State;
+    // impl Context for State {
+    //     type Error = Error;
+    //     type Ok = ();
+    // }
+    // #[command(usage = "command")]
+    // fn command_1(_: &mut State) -> Result<(), Error> {
+    //     smol::Timer::after(Duration::from_secs(1)).await;
+    //     Ok(())
+    // }
 
-    let nodes = Arc::new(ThreadLocal::new());
-    let errors = Arc::new(ThreadLocal::new());
+    // let mut dispatcher = CommandDispatcher::default();
+    // dispatcher.register(command_1).unwrap();
+    // let dispatcher = Arc::new(dispatcher);
 
-c.bench_function("paralel dispatching with a single command", |b| {
-    b.iter(|| {
-        let nodes = Arc::clone(&nodes);
-        let errors = Arc::clone(&errors);
+    // let nodes = Arc::new(ThreadLocal::new());
+    // let errors = Arc::new(ThreadLocal::new());
 
-        smol::Task::spawn(async move {
-            let nodes: &RefCell<Vec<_>> = nodes.get_or_default();
-            let errors: &RefCell<Vec<_>> = errors.get_or_default();
-            dispatcher.dispatch(&mut *nodes.borrow_mut(), &mut *errors.borrow_mut(), &mut State, "command");
-        });
-    })
-});
+    // c.bench_function("paralel dispatching with a single command", |b| {
+    //     b.iter(|| {
+    //         let nodes = Arc::clone(&nodes);
+    //         let errors = Arc::clone(&errors);
+    //         let dispatcher = Arc::clone(&dispatcher);
+
+    //         Task::spawn(async move {
+    //             let nodes: &RefCell<Vec<_>> = nodes.get_or_default();
+    //             let errors: &RefCell<Vec<_>> = errors.get_or_default();
+    //             dispatcher.dispatch(&mut *nodes.borrow_mut(), &mut *errors.borrow_mut(), &mut State, "command").await;
+    //         }).detach();
+    //     })
+    // });
 }
 
 fn multiple_commands(c: &mut Criterion) {

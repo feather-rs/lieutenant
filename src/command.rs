@@ -46,7 +46,7 @@ impl<C: Context> Clone for Argument<C> {
 
 impl<C: Context> PartialEq for Argument<C>
 where
-    C: 'static,
+    C: Context,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

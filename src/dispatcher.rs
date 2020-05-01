@@ -132,7 +132,7 @@ where
             let node = &self.nodes[*node_key];
             let satisfies = match &node.argument {
                 Argument::Literal { value } => value == input.head(" "),
-                Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input),
+                Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input).await,
             };
 
             if input.is_empty() && satisfies {
