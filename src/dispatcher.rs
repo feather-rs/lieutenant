@@ -1,7 +1,6 @@
-use crate::{ArgumentChecker, Command, CommandNode, CommandNodeKind};
+use crate::{command::Exec, Argument, Command, CommandSpec, Context, ParserUtil};
 use slab::Slab;
 use smallvec::SmallVec;
-use std::borrow::Cow;
 
 #[derive(Debug)]
 pub enum RegisterError {
@@ -12,36 +11,93 @@ pub enum RegisterError {
     ExecutableRoot,
 }
 
-#[derive(Copy, Clone, Debug)]
-struct NodeKey(usize);
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NodeKey(usize);
+
+impl std::ops::Deref for NodeKey {
+    type Target = usize;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Data structure used to dispatch commands.
-pub struct CommandDispatcher<C> {
+pub struct CommandDispatcher<C: Context> {
     nodes: Slab<Node<C>>,
-    root: NodeKey,
+    children: SmallVec<[NodeKey; 4]>,
+    commands: Vec<CommandSpec<C>>,
 }
 
-impl<C> Default for CommandDispatcher<C> {
+impl<C: Context> Default for CommandDispatcher<C> {
     fn default() -> Self {
-        Self::new()
+        Self {
+            nodes: Default::default(),
+            children: Default::default(),
+            commands: Default::default(),
+        }
     }
 }
 
-impl<C> CommandDispatcher<C> {
+impl<C> CommandDispatcher<C>
+where
+    C: Context,
+{
     /// Creates a new `CommandDispatcher` with no registered commands.
-    pub fn new() -> Self {
-        let mut nodes = Slab::new();
-        let root = NodeKey(nodes.insert(Node::default()));
-
-        Self { nodes, root }
-    }
 
     /// Registers a command to this `CommandDispatcher`.
     pub fn register(&mut self, command: impl Command<C>) -> Result<(), RegisterError>
     where
         C: 'static,
     {
-        self.append_node(self.root, command.into_root_node())
+        let spec = command.build();
+
+        let mut arguments = spec.arguments.iter().peekable();
+
+        let mut node_key: Option<NodeKey> = None;
+
+        'argument: while let Some(argument) = arguments.peek() {
+            let children = match node_key {
+                Some(key) => &self.nodes[*key].children,
+                None => &self.children,
+            };
+
+            for child_key in children {
+                let child = &self.nodes[**child_key];
+
+                if argument == &&child.argument {
+                    arguments.next();
+                    node_key = Some(*child_key);
+                    continue 'argument;
+                }
+            }
+            break;
+        }
+
+        for argument in arguments {
+            let child = Node::from(argument.clone());
+            let child_key = NodeKey(self.nodes.insert(child));
+
+            if let Some(node_key) = node_key {
+                let node = &mut self.nodes[*node_key];
+                node.children.push(child_key);
+            } else {
+                self.children.push(child_key);
+            }
+
+            node_key = Some(child_key);
+        }
+
+        if let Some(key) = node_key {
+            let node = &mut self.nodes[*key];
+            node.execs.push(spec.exec.clone());
+        } else {
+            // Command with zero arguments?
+            return Err(RegisterError::ExecutableRoot);
+        }
+
+        self.commands.push(spec);
+
+        Ok(())
     }
 
     /// Method-chaining function to register a command.
@@ -58,151 +114,65 @@ impl<C> CommandDispatcher<C> {
     }
 
     /// Dispatches a command. Returns whether a command was executed.
-    ///
-    /// Unicode characters are currently not supported. This may be fixed in the future.
-    pub fn dispatch(&self, ctx: &mut C, command: &str) -> bool {
-        let parsed = Self::parse_into_arguments(command);
+    pub async fn dispatch<'a, 'b, 'c>(
+        &self,
+        nodes: &'b mut Vec<(&'a str, NodeKey)>,
+        errors: &'c mut Vec<C::Error>,
+        ctx: &mut C,
+        command: &'a str,
+    ) -> Result<C::Ok, &'c Vec<C::Error>> {
+        nodes.clear();
+        errors.clear();
 
-        let mut current_node = self.root;
+        for child_key in &self.children {
+            nodes.push((&command, *child_key));
+        }
 
-        for argument in &parsed {
-            // try to find a node satisfying the argument
-            let node = &self.nodes[current_node.0];
+        while let Some((mut input, node_key)) = nodes.pop() {
+            let node = &self.nodes[*node_key];
+            let satisfies = match &node.argument {
+                Argument::Literal { value } => value == input.advance_until(" "),
+                Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input).await,
+            };
 
-            // TODO: optimize linear search using a hash-array mapped trie
-            if let Some(next) = node.next.iter().find(|next| {
-                let kind = &self.nodes[next.0].kind;
-
-                match kind {
-                    NodeKind::Parser(parser) => parser.satisfies(ctx, argument),
-                    NodeKind::Literal(lit) => lit == argument,
-                    NodeKind::Root => unreachable!("root NodeKind outside the root node?"),
+            if input.is_empty() && satisfies {
+                for exec in &node.execs {
+                    match exec(ctx, command).await {
+                        Ok(ok) => return Ok(ok),
+                        Err(err) => errors.push(err),
+                    }
                 }
-            }) {
-                current_node = *next;
-            } else {
-                return false;
+                continue;
+            }
+
+            if satisfies {
+                for child_key in &node.children {
+                    nodes.push((&mut input, *child_key));
+                }
             }
         }
-
-        if let Some(exec) = &self.nodes[current_node.0].exec {
-            exec(ctx, &parsed);
-            true
-        } else {
-            false
-        }
+        Err(&*errors)
     }
 
-    fn parse_into_arguments(command: &str) -> SmallVec<[&str; 4]> {
-        // TODO: proper parser with support for strings in quotes
-        command.split(" ").collect()
-    }
-
-    fn append_node(
-        &mut self,
-        dispatcher_current: NodeKey,
-        cmd_current: CommandNode<C>,
-    ) -> Result<(), RegisterError>
-    where
-        C: 'static,
-    {
-        if let Some(exec) = cmd_current.exec {
-            let node = &mut self.nodes[dispatcher_current.0];
-
-            if let NodeKind::Root = node.kind {
-                return Err(RegisterError::ExecutableRoot);
-            }
-
-            match node.exec {
-                Some(_) => return Err(RegisterError::OverlappingCommands),
-                None => node.exec = Some(exec),
-            }
-        }
-
-        let cmd_current_kind = &cmd_current.kind;
-
-        // Find a node which has the same parser type as `cmd_current`,
-        // or add it if it doesn't exist.
-        let found = self.nodes[dispatcher_current.0]
-            .next
-            .iter()
-            .find(|key| &self.nodes[key.0].kind == cmd_current_kind)
-            .copied();
-
-        let found = if let Some(found) = found {
-            found
-        } else {
-            // Create new node, then append.
-            let new_node = self.nodes.insert(Node::from(cmd_current.kind));
-
-            self.nodes[dispatcher_current.0]
-                .next
-                .push(NodeKey(new_node));
-
-            NodeKey(new_node)
-        };
-        cmd_current
-            .next
-            .into_iter()
-            .map(|next| self.append_node(found, next))
-            .collect::<Result<(), RegisterError>>()?;
-
-        Ok(())
+    pub fn commands(&self) -> impl Iterator<Item = &CommandSpec<C>> {
+        self.commands.iter()
     }
 }
 
 /// Node on the command graph.
-struct Node<C> {
-    next: SmallVec<[NodeKey; 4]>,
-    kind: NodeKind<C>,
-    exec: Option<Box<dyn Fn(&mut C, &[&str])>>,
+struct Node<C: Context> {
+    children: SmallVec<[NodeKey; 4]>,
+    argument: Argument<C>,
+    execs: Vec<Exec<C>>,
 }
 
-impl<C> Default for Node<C> {
-    fn default() -> Self {
-        Self {
-            next: SmallVec::new(),
-            kind: NodeKind::<C>::default(),
-            exec: None,
-        }
-    }
-}
-
-impl<C> From<CommandNodeKind<C>> for Node<C> {
-    fn from(node: CommandNodeKind<C>) -> Self {
+impl<C: Context> From<Argument<C>> for Node<C> {
+    fn from(argument: Argument<C>) -> Self {
         Node {
-            next: SmallVec::new(),
-            kind: match node {
-                CommandNodeKind::Literal(lit) => NodeKind::Literal(lit),
-                CommandNodeKind::Parser(parser) => NodeKind::Parser(parser),
-            },
-            exec: None,
+            children: Default::default(),
+            argument,
+            execs: Vec::new(),
         }
-    }
-}
-
-enum NodeKind<C> {
-    Literal(Cow<'static, str>),
-    Parser(Box<dyn ArgumentChecker<C>>),
-    Root,
-}
-
-impl<C> PartialEq<CommandNodeKind<C>> for NodeKind<C>
-where
-    C: 'static,
-{
-    fn eq(&self, other: &CommandNodeKind<C>) -> bool {
-        match (self, other) {
-            (NodeKind::Literal(this), CommandNodeKind::Literal(other)) => this.eq(other),
-            (NodeKind::Parser(this), CommandNodeKind::Parser(other)) => this.equals(other),
-            _ => false,
-        }
-    }
-}
-
-impl<C> Default for NodeKind<C> {
-    fn default() -> Self {
-        NodeKind::Root
     }
 }
 

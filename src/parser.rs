@@ -1,7 +1,28 @@
+use crate::Context;
 use std::any::Any;
+use std::future::Future;
+use std::pin::Pin;
 
-pub trait ArgumentChecker<C>: Any {
-    fn satisfies(&self, ctx: &C, input: &str) -> bool;
+pub trait ParserUtil {
+    /// Advances the pointer until the given pattern and returns head and leaving the tail.
+    fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str;
+}
+
+impl ParserUtil for &str {
+    #[inline]
+    fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str {
+        let head = self.split(pat).next().unwrap_or("");
+        *self = &self[(head.len() + pat.len()).min(self.len())..];
+        head
+    }
+}
+
+pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
+    fn satisfies<'a, 'b>(
+        &self,
+        ctx: &C,
+        input: &'a mut &'b str,
+    ) -> Pin<Box<dyn Future<Output = bool> + 'a>>;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -12,18 +33,24 @@ pub trait ArgumentChecker<C>: Any {
     fn default() -> Self
     where
         Self: Sized;
+
+    fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
 }
 
-pub trait ArgumentParser<C> {
-    type Output;
+pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
+    type Output: Send + Sync;
 
-    fn parse(&self, ctx: &mut C, input: &str) -> anyhow::Result<Self::Output>;
+    fn parse<'a, 'b>(
+        &self,
+        ctx: &mut C,
+        input: &'a mut &'b str,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>;
     fn default() -> Self
     where
         Self: Sized;
 }
 
-pub trait ArgumentKind<C>: Sized {
+pub trait ArgumentKind<C: Context>: Sized + Send + Sync {
     type Checker: ArgumentChecker<C>;
     type Parser: ArgumentParser<C, Output = Self>;
 }
@@ -50,10 +77,17 @@ pub mod parsers {
 
     impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
     where
-        T: FromStr + 'static,
+        T: FromStr + Clone + Send + Sync + 'static,
     {
-        fn satisfies(&self, _ctx: &C, input: &str) -> bool {
-            T::from_str(input).is_ok()
+        fn satisfies<'a, 'b>(
+            &self,
+            _ctx: &C,
+            input: &'a mut &'b str,
+        ) -> Pin<Box<dyn Future<Output = bool> + 'a>> {
+            Box::pin(async move {
+                let head = input.advance_until(" ");
+                T::from_str(head).is_ok()
+            })
         }
 
         fn equals(&self, other: &dyn Any) -> bool {
@@ -65,6 +99,10 @@ pub mod parsers {
             Self: Sized,
         {
             <Self as Default>::default()
+        }
+
+        fn box_clone(&self) -> Box<dyn ArgumentChecker<C>> {
+            Box::new(self.clone())
         }
     }
 
@@ -83,13 +121,22 @@ pub mod parsers {
 
     impl<C, T> ArgumentParser<C> for FromStrParser<T>
     where
-        T: FromStr + 'static,
+        C: Context,
+        T: FromStr + Send + Sync + 'static,
         <T as FromStr>::Err: std::error::Error + Send + Sync,
     {
         type Output = T;
 
-        fn parse(&self, _ctx: &mut C, input: &str) -> anyhow::Result<Self::Output> {
-            T::from_str(input).map_err(anyhow::Error::from)
+        fn parse<'a, 'b>(
+            &self,
+            _ctx: &mut C,
+            input: &'a mut &'b str,
+        ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>
+        {
+            Box::pin(async move {
+                let head = input.advance_until(" ");
+                Ok(T::from_str(head)?)
+            })
         }
 
         fn default() -> Self
@@ -103,7 +150,7 @@ pub mod parsers {
     macro_rules! from_str_argument_kind {
         ($($ty:ty,)*) => {
             $(
-                impl <C> ArgumentKind<C> for $ty {
+                impl <C: Context> ArgumentKind<C> for $ty {
                     type Checker = FromStrChecker<Self>;
                     type Parser = FromStrParser<Self>;
                 }

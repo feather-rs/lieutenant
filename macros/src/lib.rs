@@ -9,18 +9,21 @@ use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, 
 #[derive(Debug, FromMeta)]
 struct Args {
     usage: String,
+    #[darling(default)]
+    description: Option<String>,
+    #[darling(default)]
+    priority: usize,
 }
 
 #[derive(Debug)]
 struct Usage {
     arguments: Vec<Argument>,
-    root_literal: String,
 }
 
 #[derive(Debug)]
 enum Argument {
-    Parameter { name: String },
-    OptionalParameter { name: String },
+    Parameter { name: String, priority: usize },
+    OptionalParameter { name: String, priority: usize },
     Literal { value: String },
 }
 
@@ -64,7 +67,7 @@ pub fn command(
         }
     } else {
         quote! {
-            impl <C> lieutenant::Command<C> for #command_ident
+            impl <C: Context> lieutenant::Command<C> for #command_ident
         }
     };
 
@@ -74,15 +77,22 @@ pub fn command(
         quote! { C }
     };
 
-    let into_root_node = generate_into_root_node(&usage, &parameters, ctx_type, &input.block);
+    let command_spec = generate_command_spec(
+        &usage,
+        args.description,
+        &parameters,
+        ctx_type,
+        &input.block,
+    );
     let visibility = &input.vis;
+
     let tokens = quote! {
         #[allow(non_camel_case_types)]
         #visibility struct #command_ident;
 
         #impl_header {
-            fn into_root_node(self) -> lieutenant::CommandNode<#ctx_actual_type> {
-                #into_root_node
+            fn build(self) -> lieutenant::CommandSpec<#ctx_actual_type> {
+                #command_spec
             }
         }
     };
@@ -91,18 +101,18 @@ pub fn command(
 
 fn parse_usage(usage: &str) -> Usage {
     let mut arguments = vec![];
-    let mut root_literal = None;
 
-    for splitted in usage.split(" ") {
+    for splitted in usage.split(' ') {
         let (first, middle) = splitted.split_at(1.min(splitted.len()));
         let (middle, last) = middle.split_at(middle.len() - 1);
         match (first, middle, last) {
-            ("/", _, _) => root_literal = Some(splitted[1..].to_owned()),
             ("<", param, ">") => arguments.push(Argument::Parameter {
                 name: param.to_owned(),
+                priority: 0,
             }),
             ("[", param, "]") => arguments.push(Argument::OptionalParameter {
                 name: param.to_owned(),
+                priority: 0,
             }),
             (_, _, _) => arguments.push(Argument::Literal {
                 value: splitted.to_owned(),
@@ -110,19 +120,7 @@ fn parse_usage(usage: &str) -> Usage {
         }
     }
 
-    let root_literal = match root_literal {
-        Some(r) => r,
-        None => abort_call_site!(
-            "missing root command literal";
-
-            help = "make sure your `usage` starts with the command name prefixed with a slash: `/command`"
-        ),
-    };
-
-    Usage {
-        arguments,
-        root_literal,
-    }
+    Usage { arguments }
 }
 
 fn collect_parameters<'a>(
@@ -132,7 +130,7 @@ fn collect_parameters<'a>(
     let mut parameters = vec![];
     for arg in &usage.arguments {
         match arg {
-            Argument::Parameter { name } | Argument::OptionalParameter { name } => {
+            Argument::Parameter { name, .. } | Argument::OptionalParameter { name, .. } => {
                 collect_parameter(name, &mut parameters, arg, inputs);
             }
             Argument::Literal { .. } => (),
@@ -274,73 +272,62 @@ fn detect_context_type<'a>(
         })
 }
 
-fn generate_into_root_node(
+fn generate_command_spec(
     usage: &Usage,
+    description: Option<String>,
     parameters: &[&PatType],
     ctx_type: Option<(&Type, &Pat)>,
     block: &Block,
 ) -> TokenStream {
-    let mut statements = vec![];
-
-    let root_literal = &usage.root_literal;
-    statements.push(quote! {
-        let mut root = lieutenant::CommandNode {
-            kind: lieutenant::CommandNodeKind::Literal(#root_literal.into()),
-            next: vec![],
-            exec: None,
-        };
-
-        let mut current = &mut root;
-    });
+    // let mut statements = vec![];
 
     let ctx_param = match ctx_type {
         Some((t, _)) => quote! { #t },
         None => quote! { C },
     };
 
+    let mut arguments = vec![];
+
     let mut i = 0;
     for argument in &usage.arguments {
-        let node = match argument {
-            Argument::Parameter { .. } | Argument::OptionalParameter { .. } => {
+        let argument = match argument {
+            Argument::Parameter { name, priority }
+            | Argument::OptionalParameter { name, priority } => {
                 let argument_type = parameters[i];
 
                 let ty = &argument_type.ty;
                 i += 1;
 
                 quote! {
-                    lieutenant::CommandNode::<_> {
-                        kind: lieutenant::CommandNodeKind::Parser
-                            (Box::new(<<#ty as lieutenant::ArgumentKind<#ctx_param>>::Checker
-                            as lieutenant::ArgumentChecker<#ctx_param>>::default())),
-                        next: vec![],
-                        exec: None,
+                    lieutenant::Argument::Parser {
+                        name: #name.into(),
+                        checker: Box::new(<<#ty as lieutenant::ArgumentKind<#ctx_param>>::Checker
+                            as lieutenant::ArgumentChecker<#ctx_param>>::default()),
+                        priority: #priority,
                     }
                 }
             }
             Argument::Literal { value } => {
                 quote! {
-                    lieutenant::CommandNode::<_> {
-                        kind: lieutenant::CommandNodeKind::Literal(#value.into()),
-                        next: vec![],
-                        exec: None,
+                    lieutenant::Argument::Literal {
+                        value: #value.into(),
                     }
                 }
             }
         };
 
-        statements.push(quote! {
-            current.next.push(#node);
-            current = &mut current.next[0];
+        arguments.push(quote! {
+            arguments.push(#argument);
         });
     }
 
     let mut parse_args = vec![];
 
-    let mut i = 1;
-    for argument in &usage.arguments {
+    let mut i = 0;
+    for argument in usage.arguments.iter() {
         match argument {
             Argument::Parameter { .. } | Argument::OptionalParameter { .. } => {
-                let parameter = parameters[i - 1];
+                let parameter = parameters[i];
                 let ident = &parameter.pat;
                 let ty = &parameter.ty;
                 let ctx_ident = match ctx_type {
@@ -350,13 +337,15 @@ fn generate_into_root_node(
 
                 parse_args.push(quote! {
                     let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
-                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident,
-                    args[#i]).unwrap();
+                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut args).await.unwrap();
                 });
 
                 i += 1;
             }
-            _ => (),
+            Argument::Literal { value } => parse_args.push(quote! {
+                let head = args.advance_until(" ");
+                debug_assert_eq!(head, #value);
+            }),
         }
     }
 
@@ -365,20 +354,28 @@ fn generate_into_root_node(
         None => quote! { _ctx: &mut C },
     };
 
-    let res = quote! {
-        #(#statements)*
+    let description = match description {
+        Some(description) => quote! { Some(#description.into()) },
+        None => quote! { None },
+    };
 
-        current.next.push(lieutenant::CommandNode::<_> {
-            kind: lieutenant::CommandNodeKind::<_>::Literal("".into()),
-            exec: Some(Box::new(|#ctx_type, args| {
+    let arguments_len = arguments.len();
+
+    let res = quote! {
+        use lieutenant::ParserUtil;
+        let mut arguments = Vec::with_capacity(#arguments_len);
+        #(#arguments)*
+
+        lieutenant::CommandSpec {
+            arguments,
+            description: #description,
+            exec: |#ctx_type, args| Box::pin(async move {
                 use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
+                let mut args = args;
                 #(#parse_args)*
                 #block
-            })),
-            next: vec![],
-        });
-
-        root
+            }),
+        }
     };
     res
 }
