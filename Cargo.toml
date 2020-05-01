@@ -22,5 +22,15 @@ thread_local = "1.0"
 name = "dispatcher"
 harness = false
 
+[dev-dependencies]
+criterion = "0.3"
+smol = "0.1"
+futures = "0.3"
+thread_local = "1.0"
+
+[[bench]]
+name = "dispatcher"
+harness = false
+
 [workspace]
 members = [".", "macros"]
