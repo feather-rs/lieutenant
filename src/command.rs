@@ -24,9 +24,9 @@ impl<C: Context> Argument<C> {
     pub fn priority(&self) -> usize {
         match self {
             Argument::Literal { .. } => 0,
-            Argument::Parser { priority, ..} => *priority,
+            Argument::Parser { priority, .. } => *priority,
         }
-    } 
+    }
 }
 
 impl<C: Context> Clone for Argument<C> {
@@ -35,7 +35,11 @@ impl<C: Context> Clone for Argument<C> {
             Argument::Literal { value } => Argument::Literal {
                 value: value.clone(),
             },
-            Argument::Parser { name, checker, priority } => Argument::Parser {
+            Argument::Parser {
+                name,
+                checker,
+                priority,
+            } => Argument::Parser {
                 name: name.clone(),
                 checker: checker.box_clone(),
                 priority: priority.clone(),
@@ -59,10 +63,7 @@ where
     }
 }
 
-impl<C: Context> Eq for Argument<C>
-where
-    C: 'static,
-{}
+impl<C: Context> Eq for Argument<C> where C: 'static {}
 
 impl<C: Context> PartialOrd for Argument<C>
 where
@@ -82,7 +83,12 @@ where
     }
 }
 
-pub type Exec<C> = for<'a> fn(&'a mut C, &'a str) -> Pin<Box<dyn Future<Output = Result<<C as Context>::Ok, <C as Context>::Error>> + Send + 'a>>;
+pub type Exec<C> = for<'a> fn(
+    &'a mut C,
+    &'a str,
+) -> Pin<
+    Box<dyn Future<Output = Result<<C as Context>::Ok, <C as Context>::Error>> + Send + 'a>,
+>;
 
 pub struct CommandSpec<C: Context> {
     pub arguments: Vec<Argument<C>>,

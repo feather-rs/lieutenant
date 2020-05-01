@@ -291,7 +291,8 @@ fn generate_command_spec(
     let mut i = 0;
     for argument in &usage.arguments {
         let argument = match argument {
-            Argument::Parameter { name, priority } | Argument::OptionalParameter { name, priority } => {
+            Argument::Parameter { name, priority }
+            | Argument::OptionalParameter { name, priority } => {
                 let argument_type = parameters[i];
 
                 let ty = &argument_type.ty;
@@ -341,7 +342,7 @@ fn generate_command_spec(
 
                 i += 1;
             }
-            Argument::Literal { value } => parse_args.push(quote! { 
+            Argument::Literal { value } => parse_args.push(quote! {
                 let head = args.advance_until(" ");
                 debug_assert_eq!(head, #value);
             }),

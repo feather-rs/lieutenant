@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lieutenant::{command, CommandDispatcher, Context};
 use thiserror::Error;
 
@@ -25,7 +25,13 @@ fn single_command(c: &mut Criterion) {
 
     c.bench_function("dispatch single command", |b| {
         b.iter(|| {
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, black_box("command"))).is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                black_box("command")
+            ))
+            .is_ok());
         })
     });
 }
@@ -119,20 +125,55 @@ fn multiple_commands(c: &mut Criterion) {
         .with(command_2)
         .with(command_3)
         .with(command_4)
-        .with(command_5)
-        ;
+        .with(command_5);
 
     let mut nodes = Vec::new();
     let mut errors = Vec::new();
 
     c.bench_function("dispatch multiple commands", |b| {
         b.iter(|| {
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command")).is_ok());
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command 4")).is_ok());
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command 4 hello")).is_ok());
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command hello hello")).is_ok());
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command 4 4 4")).is_ok());
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command a a a")).is_err());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                "command"
+            ))
+            .is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                "command 4"
+            ))
+            .is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                "command 4 hello"
+            ))
+            .is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                "command hello hello"
+            ))
+            .is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                "command 4 4 4"
+            ))
+            .is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(
+                &mut nodes,
+                &mut errors,
+                &mut State,
+                "command a a a"
+            ))
+            .is_err());
         })
     });
 }
@@ -141,5 +182,8 @@ criterion_group!(single_command_bench, single_command);
 criterion_group!(single_command_parallel_bench, single_command_prallel);
 criterion_group!(multiple_commands_bench, multiple_commands);
 
-criterion_main!(single_command_bench, single_command_parallel_bench, multiple_commands_bench);
-
+criterion_main!(
+    single_command_bench,
+    single_command_parallel_bench,
+    multiple_commands_bench
+);

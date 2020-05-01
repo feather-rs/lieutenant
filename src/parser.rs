@@ -1,7 +1,7 @@
+use crate::Context;
 use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
-use crate::Context;
 
 pub trait ParserUtil {
     /// Advances the pointer until the given pattern and returns head and leaving the tail.
@@ -18,7 +18,11 @@ impl ParserUtil for &str {
 }
 
 pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
-    fn satisfies<'a, 'b>(&self, ctx: &C, input: &'a mut &'b str) -> Pin<Box<dyn Future<Output = bool> + 'a>>;
+    fn satisfies<'a, 'b>(
+        &self,
+        ctx: &C,
+        input: &'a mut &'b str,
+    ) -> Pin<Box<dyn Future<Output = bool> + 'a>>;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -36,7 +40,11 @@ pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
 pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
     type Output: Send + Sync;
 
-    fn parse<'a, 'b>(&self, ctx: &mut C, input: &'a mut &'b str) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a >>;
+    fn parse<'a, 'b>(
+        &self,
+        ctx: &mut C,
+        input: &'a mut &'b str,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>;
     fn default() -> Self
     where
         Self: Sized;
@@ -69,7 +77,11 @@ pub mod parsers {
     where
         T: FromStr + Clone + Send + Sync + 'static,
     {
-        fn satisfies<'a, 'b>(&self, _ctx: &C, input: &'a mut &'b str) -> Pin<Box<dyn Future<Output = bool> + 'a >> {
+        fn satisfies<'a, 'b>(
+            &self,
+            _ctx: &C,
+            input: &'a mut &'b str,
+        ) -> Pin<Box<dyn Future<Output = bool> + 'a>> {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 T::from_str(head).is_ok()
@@ -113,7 +125,12 @@ pub mod parsers {
     {
         type Output = T;
 
-        fn parse<'a, 'b>(&self, _ctx: &mut C, input: &'a mut &'b str) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a >> {
+        fn parse<'a, 'b>(
+            &self,
+            _ctx: &mut C,
+            input: &'a mut &'b str,
+        ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>
+        {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 Ok(T::from_str(head)?)
