@@ -12,13 +12,13 @@ fn single_command(c: &mut Criterion) {
         type Ok = ();
     }
     #[command(usage = "command")]
-    fn command_1(_: &mut State) -> Result<(), Error> {
+    fn command(_: &mut State) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
 
     let mut dispatcher = CommandDispatcher::default();
-    dispatcher.register(command_1).unwrap();
+    dispatcher.register(command).unwrap();
 
     let mut nodes = Vec::new();
     let mut errors = Vec::new();

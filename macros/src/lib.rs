@@ -342,7 +342,7 @@ fn generate_command_spec(
                 i += 1;
             }
             Argument::Literal { value } => parse_args.push(quote! { 
-                let head = args.head(" ");
+                let head = args.advance_until(" ");
                 debug_assert_eq!(head, #value);
             }),
         }
@@ -361,7 +361,7 @@ fn generate_command_spec(
     let arguments_len = arguments.len();
 
     let res = quote! {
-        use lieutenant::Head;
+        use lieutenant::ParserUtil;
         let mut arguments = Vec::with_capacity(#arguments_len);
         #(#arguments)*
 

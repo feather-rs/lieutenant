@@ -3,14 +3,14 @@ use std::future::Future;
 use std::pin::Pin;
 use crate::Context;
 
-pub trait Head {
-    /// Splits the string on the patterns returning the head and advancing the input to tail.
-    fn head<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str;
+pub trait ParserUtil {
+    /// Advances the pointer until the given pattern and returns head and leaving the tail.
+    fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str;
 }
 
-impl Head for &str {
+impl ParserUtil for &str {
     #[inline]
-    fn head<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str {
+    fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str {
         let head = self.split(pat).next().unwrap_or("");
         *self = &self[(head.len() + pat.len()).min(self.len())..];
         head
@@ -71,7 +71,7 @@ pub mod parsers {
     {
         fn satisfies<'a, 'b>(&self, _ctx: &C, input: &'a mut &'b str) -> Pin<Box<dyn Future<Output = bool> + 'a >> {
             Box::pin(async move {
-                let head = input.head(" ");
+                let head = input.advance_until(" ");
                 T::from_str(head).is_ok()
             })
         }
@@ -115,7 +115,7 @@ pub mod parsers {
 
         fn parse<'a, 'b>(&self, _ctx: &mut C, input: &'a mut &'b str) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a >> {
             Box::pin(async move {
-                let head = input.head(" ");
+                let head = input.advance_until(" ");
                 Ok(T::from_str(head)?)
             })
         }

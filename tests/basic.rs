@@ -81,7 +81,7 @@ fn basic_command_parralel() {
     let now = Instant::now();
 
     assert_eq!(
-        smol::block_on(async { join!(call_a, call_b) }),
+        smol::run(async { join!(call_a, call_b) }),
         (Ok(()), Ok(()))
     );
 

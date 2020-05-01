@@ -1,4 +1,4 @@
-use crate::{command::Exec, Argument, Command, CommandSpec, Context, Head};
+use crate::{command::Exec, Argument, Command, CommandSpec, Context, ParserUtil};
 use slab::Slab;
 use smallvec::SmallVec;
 
@@ -131,7 +131,7 @@ where
         while let Some((mut input, node_key)) = nodes.pop() {
             let node = &self.nodes[*node_key];
             let satisfies = match &node.argument {
-                Argument::Literal { value } => value == input.head(" "),
+                Argument::Literal { value } => value == input.advance_until(" "),
                 Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input).await,
             };
 
