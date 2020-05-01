@@ -42,7 +42,7 @@ impl<C: Context> Clone for Argument<C> {
             } => Argument::Parser {
                 name: name.clone(),
                 checker: checker.box_clone(),
-                priority: priority.clone(),
+                priority: *priority,
             },
         }
     }
