@@ -29,15 +29,20 @@ fn basic_command() {
     let mut errors = Vec::new();
 
     let mut x = State(0);
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut x, "test 27")).is_ok());
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut x, "test 27")).is_ok()
+    );
     assert_eq!(x, State(27));
 }
 
 #[test]
 fn basic_command_parralel() {
-    use std::thread;
     use futures::future;
+    use futures::join;
+    use smol::Timer;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
     for _ in 0..2 {
         // A pending future is one that simply yields forever.
         thread::spawn(|| smol::run(future::pending::<()>()));
@@ -54,18 +59,33 @@ fn basic_command_parralel() {
     #[command(usage = "test <x>")]
     fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
         *ctx = State(x);
+        Timer::after(Duration::from_secs(1)).await;
+
         Ok(())
     };
 
     let dispatcher = CommandDispatcher::default().with(test);
 
-    let mut nodes = Vec::new();
-    let mut errors = Vec::new();
+    let mut nodes_a = Vec::new();
+    let mut errors_a = Vec::new();
 
-    let mut x = State(0);
-    assert!(smol::run(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut x, "test 27")).is_ok());
-    assert_eq!(x, State(27));
+    let mut nodes_b = Vec::new();
+    let mut errors_b = Vec::new();
+
+    let mut a = State(0);
+    let mut b = State(0);
+
+    let call_a = dispatcher.dispatch(&mut nodes_a, &mut errors_a, &mut a, "test 27");
+    let call_b = dispatcher.dispatch(&mut nodes_b, &mut errors_b, &mut b, "test 27");
+
+    let now = Instant::now();
+
+    assert_eq!(
+        smol::block_on(async { join!(call_a, call_b) }),
+        (Ok(()), Ok(()))
+    );
+
+    assert_eq!(now.elapsed().as_secs(), 1);
 }
 
 #[test]
@@ -131,14 +151,13 @@ fn multiple_args() {
         x: 690854,
         y: String::from("wrong"),
     };
-    assert!(smol::block_on(dispatcher
-        .dispatch(
-            &mut nodes,
-            &mut errors,
-            &mut state,
-            "test14 66 string extra_literal"
-        ))
-        .is_ok());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "test14 66 string extra_literal"
+    ))
+    .is_ok());
 
     assert_eq!(state.x, 66);
     assert_eq!(state.y.as_str(), "string");
@@ -178,22 +197,35 @@ fn multiple_commands() {
         y: String::from("incorrect"),
     };
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "cmd1 10"))
-        .is_err()); // misssing extra_lit
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "cmd1 10"))
+            .is_err()
+    ); // misssing extra_lit
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "cmd1 10 extra_lit"))
-        .is_ok());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "cmd1 10 extra_lit"
+    ))
+    .is_ok());
     assert_eq!(state.x, 10);
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "invalid command 22"))
-        .is_err());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "invalid command 22"
+    ))
+    .is_err());
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "cmd2 new_string"))
-        .is_ok());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "cmd2 new_string"
+    ))
+    .is_ok());
     assert_eq!(state.y.as_str(), "new_string");
 }
 
@@ -240,43 +272,64 @@ fn command_macro() {
         x: 0,
         player: String::new(),
     };
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "false command"))
-        .is_err());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "false command"
+    ))
+    .is_err());
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "test 25"))
-        .is_ok());
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "test 25")).is_ok()
+    );
     assert_eq!(state.x, 25);
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "foo twenty-six"))
-        .is_ok());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "foo twenty-six"
+    ))
+    .is_ok());
     assert_eq!(state.player.as_str(), "twenty-six");
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "test"))
-        .is_err());
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "test")).is_err()
+    );
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "test not-a-number"))
-        .is_err());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "test not-a-number"
+    ))
+    .is_err());
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "bar"))
-        .is_err());
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "bar")).is_err()
+    );
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "bar player"))
-        .is_err());
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "bar player"))
+            .is_err()
+    );
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "bar player four"))
-        .is_err());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "bar player four"
+    ))
+    .is_err());
 
-    assert!(smol::block_on(dispatcher
-        .dispatch(&mut nodes, &mut errors, &mut state, "bar PLAYER 28"))
-        .is_ok());
+    assert!(smol::block_on(dispatcher.dispatch(
+        &mut nodes,
+        &mut errors,
+        &mut state,
+        "bar PLAYER 28"
+    ))
+    .is_ok());
 
     assert_eq!(state.x, 29);
     assert_eq!(state.player.as_str(), "twenty-sixPLAYER");

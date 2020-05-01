@@ -23,7 +23,7 @@ fn single_command(c: &mut Criterion) {
     let mut nodes = Vec::new();
     let mut errors = Vec::new();
 
-    c.bench_function("dispatcher with a single command being dispatched", |b| {
+    c.bench_function("dispatch single command", |b| {
         b.iter(|| {
             assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, black_box("command"))).is_ok());
         })
@@ -125,7 +125,7 @@ fn multiple_commands(c: &mut Criterion) {
     let mut nodes = Vec::new();
     let mut errors = Vec::new();
 
-    c.bench_function("dispatcher with a single command being dispatched", |b| {
+    c.bench_function("dispatch multiple commands", |b| {
         b.iter(|| {
             assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command")).is_ok());
             assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command 4")).is_ok());
