@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion, black_box};
 use lieutenant::{command, CommandDispatcher, Context};
 use thiserror::Error;
 
@@ -25,9 +25,51 @@ fn single_command(c: &mut Criterion) {
 
     c.bench_function("dispatcher with a single command being dispatched", |b| {
         b.iter(|| {
-            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "command")).is_ok());
+            assert!(smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, black_box("command"))).is_ok());
         })
     });
+}
+
+fn single_command_prallel(c: &mut Criterion) {
+    use std::thread;
+    use thread_local::ThreadLocal;
+    use futures::future;
+    use std::cell::RefCell;
+    use std::sync::Arc;
+    for _ in 0..2 {
+        // A pending future is one that simply yields forever.
+        thread::spawn(|| smol::run(future::pending::<()>()));
+    }
+
+    struct State;
+    impl Context for State {
+        type Error = Error;
+        type Ok = ();
+    }
+    #[command(usage = "command")]
+    fn command_1(_: &mut State) -> Result<(), Error> {
+        // thread::sleep(time::Duration::from_millis(1));
+        Ok(())
+    }
+
+    let mut dispatcher = CommandDispatcher::default();
+    dispatcher.register(command_1).unwrap();
+
+    let nodes = Arc::new(ThreadLocal::new());
+    let errors = Arc::new(ThreadLocal::new());
+
+c.bench_function("paralel dispatching with a single command", |b| {
+    b.iter(|| {
+        let nodes = Arc::clone(&nodes);
+        let errors = Arc::clone(&errors);
+
+        smol::Task::spawn(async move {
+            let nodes: &RefCell<Vec<_>> = nodes.get_or_default();
+            let errors: &RefCell<Vec<_>> = errors.get_or_default();
+            dispatcher.dispatch(&mut *nodes.borrow_mut(), &mut *errors.borrow_mut(), &mut State, "command");
+        });
+    })
+});
 }
 
 fn multiple_commands(c: &mut Criterion) {
@@ -90,5 +132,8 @@ fn multiple_commands(c: &mut Criterion) {
 }
 
 criterion_group!(single_command_bench, single_command);
+criterion_group!(single_command_parallel_bench, single_command_prallel);
 criterion_group!(multiple_commands_bench, multiple_commands);
-criterion_main!(single_command_bench, multiple_commands_bench);
+
+criterion_main!(single_command_bench, single_command_parallel_bench, multiple_commands_bench);
+

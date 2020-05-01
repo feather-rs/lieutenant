@@ -114,13 +114,13 @@ where
     }
 
     /// Dispatches a command. Returns whether a command was executed.
-    pub async fn dispatch<'a, 'b>(
+    pub async fn dispatch<'a, 'b, 'c>(
         &self,
         nodes: &'b mut Vec<(&'a str, NodeKey)>,
-        errors: &'b mut Vec<C::Error>,
+        errors: &'c mut Vec<C::Error>,
         ctx: &mut C,
         command: &'a str,
-    ) -> Result<C::Ok, &'b Vec<C::Error>> {
+    ) -> Result<C::Ok, &'c Vec<C::Error>> {
         nodes.clear();
         errors.clear();
 
