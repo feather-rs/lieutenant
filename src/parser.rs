@@ -1,47 +1,21 @@
 use std::any::Any;
 
-#[derive(Clone, Debug)]
-pub struct Input<'a> {
-    cursor: usize,
-    value: &'a str,
+pub trait Head {
+    /// Splits the string on the patterns returning the head and advancing the input to tail.
+    fn head<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str;
 }
 
-impl<'a> Input<'a> {
-    pub fn head(&mut self, pattern: &str) -> &'a str {
-        if !self.is_empty() {
-            let (_, tail) = self.value.split_at(self.cursor);
-            let head = tail.split(pattern).next().unwrap_or("");
-            self.cursor += head.len() + pattern.len();
-            head
-        } else {
-            ""
-        }
-    }
-
-    pub fn tail(&self) -> &str {
-        if !self.is_empty() {
-            self.value.split_at(self.cursor).1
-        } else {
-            ""
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.cursor >= self.value.len()
+impl Head for &str {
+    #[inline]
+    fn head<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str {
+        let head = self.split(pat).next().unwrap_or("");
+        *self = &self[(head.len() + pat.len()).min(self.len())..];
+        head
     }
 }
 
-impl<'a> From<&'a str> for Input<'a> {
-    fn from(input: &'a str) -> Self {
-        Self {
-            cursor: 0,
-            value: input,
-        }
-    }
-}
-
-pub trait ArgumentChecker<C>: Any {
-    fn satisfies(&self, ctx: &C, input: &mut Input) -> bool;
+pub trait ArgumentChecker<C>: Any + Send + Sync {
+    fn satisfies(&self, ctx: &C, input: &mut &str) -> bool;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -56,16 +30,16 @@ pub trait ArgumentChecker<C>: Any {
     fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
 }
 
-pub trait ArgumentParser<C> {
+pub trait ArgumentParser<C>: Send + Sync {
     type Output;
 
-    fn parse(&self, ctx: &mut C, input: &mut Input) -> anyhow::Result<Self::Output>;
+    fn parse(&self, ctx: &mut C, input: &mut &str) -> anyhow::Result<Self::Output>;
     fn default() -> Self
     where
         Self: Sized;
 }
 
-pub trait ArgumentKind<C>: Sized {
+pub trait ArgumentKind<C>: Sized + Send {
     type Checker: ArgumentChecker<C>;
     type Parser: ArgumentParser<C, Output = Self>;
 }
@@ -90,9 +64,9 @@ pub mod parsers {
 
     impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
     where
-        T: FromStr + Clone + 'static,
+        T: FromStr + Clone + Send + Sync + 'static,
     {
-        fn satisfies(&self, _ctx: &C, input: &mut Input) -> bool {
+        fn satisfies(&self, _ctx: &C, input: &mut &str) -> bool {
             let head = input.head(" ");
             T::from_str(head).is_ok()
         }
@@ -128,12 +102,12 @@ pub mod parsers {
 
     impl<C, T> ArgumentParser<C> for FromStrParser<T>
     where
-        T: FromStr + 'static,
+        T: FromStr + Send + Sync + 'static,
         <T as FromStr>::Err: std::error::Error + Send + Sync,
     {
         type Output = T;
 
-        fn parse(&self, _ctx: &mut C, input: &mut Input) -> anyhow::Result<Self::Output> {
+        fn parse(&self, _ctx: &mut C, input: &mut &str) -> anyhow::Result<Self::Output> {
             let head = input.head(" ");
             Ok(T::from_str(head)?)
         }
@@ -158,28 +132,4 @@ pub mod parsers {
     }
 
     from_str_argument_kind!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, String, bool);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Input;
-    #[test]
-    fn input() {
-        let input = Input::from("foo bar");
-        {
-            let mut input = input.clone();
-            let foo = input.head(" ");
-
-            assert_eq!(foo, "foo");
-            assert_eq!(input.tail(), "bar");
-            assert!(!input.is_empty());
-
-            let bar = input.head(" ");
-            assert_eq!(bar, "bar");
-            assert!(input.is_empty());
-            assert_eq!(input.head(" "), "")
-        }
-
-        assert_eq!(input.tail(), "foo bar");
-    }
 }

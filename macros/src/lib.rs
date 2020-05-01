@@ -11,6 +11,8 @@ struct Args {
     usage: String,
     #[darling(default)]
     description: Option<String>,
+    #[darling(default)]
+    priority: usize,
 }
 
 #[derive(Debug)]
@@ -20,8 +22,8 @@ struct Usage {
 
 #[derive(Debug)]
 enum Argument {
-    Parameter { name: String },
-    OptionalParameter { name: String },
+    Parameter { name: String, priority: usize },
+    OptionalParameter { name: String, priority: usize },
     Literal { value: String },
 }
 
@@ -65,7 +67,7 @@ pub fn command(
         }
     } else {
         quote! {
-            impl <C> lieutenant::Command<C> for #command_ident
+            impl <C: Context> lieutenant::Command<C> for #command_ident
         }
     };
 
@@ -106,9 +108,11 @@ fn parse_usage(usage: &str) -> Usage {
         match (first, middle, last) {
             ("<", param, ">") => arguments.push(Argument::Parameter {
                 name: param.to_owned(),
+                priority: 0,
             }),
             ("[", param, "]") => arguments.push(Argument::OptionalParameter {
                 name: param.to_owned(),
+                priority: 0,
             }),
             (_, _, _) => arguments.push(Argument::Literal {
                 value: splitted.to_owned(),
@@ -126,7 +130,7 @@ fn collect_parameters<'a>(
     let mut parameters = vec![];
     for arg in &usage.arguments {
         match arg {
-            Argument::Parameter { name } | Argument::OptionalParameter { name } => {
+            Argument::Parameter { name, .. } | Argument::OptionalParameter { name, .. } => {
                 collect_parameter(name, &mut parameters, arg, inputs);
             }
             Argument::Literal { .. } => (),
@@ -287,7 +291,7 @@ fn generate_command_spec(
     let mut i = 0;
     for argument in &usage.arguments {
         let argument = match argument {
-            Argument::Parameter { name } | Argument::OptionalParameter { name } => {
+            Argument::Parameter { name, priority } | Argument::OptionalParameter { name, priority } => {
                 let argument_type = parameters[i];
 
                 let ty = &argument_type.ty;
@@ -297,7 +301,8 @@ fn generate_command_spec(
                     lieutenant::Argument::Parser {
                         name: #name.into(),
                         checker: Box::new(<<#ty as lieutenant::ArgumentKind<#ctx_param>>::Checker
-                            as lieutenant::ArgumentChecker<#ctx_param>>::default())
+                            as lieutenant::ArgumentChecker<#ctx_param>>::default()),
+                        priority: #priority,
                     }
                 }
             }
@@ -331,12 +336,15 @@ fn generate_command_spec(
 
                 parse_args.push(quote! {
                     let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
-                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut input).unwrap();
+                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut args).unwrap();
                 });
 
                 i += 1;
             }
-            Argument::Literal { .. } => parse_args.push(quote! { input.head(" "); }),
+            Argument::Literal { value } => parse_args.push(quote! { 
+                let head = args.head(" ");
+                debug_assert_eq!(head, #value);
+            }),
         }
     }
 
@@ -353,18 +361,19 @@ fn generate_command_spec(
     let arguments_len = arguments.len();
 
     let res = quote! {
+        use lieutenant::Head;
         let mut arguments = Vec::with_capacity(#arguments_len);
         #(#arguments)*
 
         lieutenant::CommandSpec {
             arguments,
             description: #description,
-            exec: |#ctx_type, args| {
+            exec: |#ctx_type, args| Box::pin(async move {
                 use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
-                let mut input = lieutenant::Input::from(args);
+                let mut args = args;
                 #(#parse_args)*
                 #block
-            },
+            }),
         }
     };
     res

@@ -1,4 +1,4 @@
-use crate::{command::Exec, Argument, Command, CommandSpec, Context, Input};
+use crate::{command::Exec, Argument, Command, CommandSpec, Context, Head};
 use slab::Slab;
 use smallvec::SmallVec;
 
@@ -12,7 +12,7 @@ pub enum RegisterError {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct NodeKey(usize);
+pub struct NodeKey(usize);
 
 impl std::ops::Deref for NodeKey {
     type Target = usize;
@@ -114,15 +114,19 @@ where
     }
 
     /// Dispatches a command. Returns whether a command was executed.
-    pub fn dispatch(&self, ctx: &mut C, command: &str) -> Option<Result<C::Ok, C::Error>> {
-        let input = Input::from(command);
+    pub async fn dispatch<'a, 'b>(
+        &self,
+        nodes: &'b mut Vec<(&'a str, NodeKey)>,
+        errors: &'b mut Vec<C::Error>,
+        ctx: &mut C,
+        command: &'a str,
+    ) -> Result<C::Ok, &'b Vec<C::Error>> {
+        nodes.clear();
+        errors.clear();
 
-        let mut nodes = Vec::new();
         for child_key in &self.children {
-            nodes.push((input.clone(), *child_key));
+            nodes.push((&command, *child_key));
         }
-
-        let mut error = None;
 
         while let Some((mut input, node_key)) = nodes.pop() {
             let node = &self.nodes[*node_key];
@@ -133,9 +137,9 @@ where
 
             if input.is_empty() && satisfies {
                 for exec in &node.execs {
-                    match exec(ctx, command) {
-                        ok @ Ok(_) => return Some(ok),
-                        err @ Err(_) => error = Some(err),
+                    match exec(ctx, command).await {
+                        Ok(ok) => return Ok(ok),
+                        Err(err) => errors.push(err),
                     }
                 }
                 continue;
@@ -143,11 +147,11 @@ where
 
             if satisfies {
                 for child_key in &node.children {
-                    nodes.push((input.clone(), *child_key));
+                    nodes.push((&mut input, *child_key));
                 }
             }
         }
-        error
+        Err(&*errors)
     }
 
     pub fn commands(&self) -> impl Iterator<Item = &CommandSpec<C>> {
