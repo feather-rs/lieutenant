@@ -11,7 +11,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 slab = "0.4"
 smallvec = "1.4"
-bstr = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"
