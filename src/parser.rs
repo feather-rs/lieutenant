@@ -22,7 +22,7 @@ pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
         &self,
         ctx: &C,
         input: &'a mut &'b str,
-    ) -> Pin<Box<dyn Future<Output = bool> + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -44,7 +44,7 @@ pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
         &self,
         ctx: &mut C,
         input: &'a mut &'b str,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + 'a>>;
     fn default() -> Self
     where
         Self: Sized;
@@ -83,7 +83,7 @@ pub mod parsers {
             &self,
             _ctx: &C,
             input: &'a mut &'b str,
-        ) -> Pin<Box<dyn Future<Output = bool> + 'a>> {
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 T::from_str(head).is_ok()
@@ -131,8 +131,7 @@ pub mod parsers {
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>
-        {
+        ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + 'a>> {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 Ok(T::from_str(head)?)
