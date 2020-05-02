@@ -43,6 +43,9 @@ where
     C: Context,
 {
     /// Creates a new `CommandDispatcher` with no registered commands.
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Registers a command to this `CommandDispatcher`.
     pub fn register(&mut self, command: impl Command<C>) -> Result<(), RegisterError>
