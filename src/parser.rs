@@ -17,7 +17,12 @@ impl ParserUtil for &str {
     }
 }
 
-pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
+pub trait Provider<C: Context> {
+    type Output: Sized;
+    fn provide<'a>(ctx: &C) -> Pin<Box<dyn Future<Output = Result<Self::Output, C::Error>> + Send + Sync + 'a>>;
+}
+
+pub trait ArgumentChecker<C: Context>: Any + Send + Sync + 'static {
     fn satisfies<'a, 'b>(
         &self,
         ctx: &C,
@@ -44,7 +49,7 @@ pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
         &self,
         ctx: &mut C,
         input: &'a mut &'b str,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, C::Error>> + Send + Sync + 'a>>;
     fn default() -> Self
     where
         Self: Sized;
@@ -77,6 +82,7 @@ pub mod parsers {
 
     impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
     where
+        C: Context,
         T: FromStr + Clone + Send + Sync + 'static,
     {
         fn satisfies<'a, 'b>(
@@ -122,6 +128,7 @@ pub mod parsers {
     impl<C, T> ArgumentParser<C> for FromStrParser<T>
     where
         C: Context,
+        C::Error: From<<T as FromStr>::Err>,
         T: FromStr + Send + Sync + 'static,
         <T as FromStr>::Err: std::error::Error + Send + Sync,
     {
@@ -131,7 +138,7 @@ pub mod parsers {
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + Sync + 'a>>
+        ) -> Pin<Box<dyn Future<Output = Result<Self::Output, C::Error>> + Send + Sync + 'a>>
         {
             Box::pin(async move {
                 let head = input.advance_until(" ");
@@ -150,7 +157,11 @@ pub mod parsers {
     macro_rules! from_str_argument_kind {
         ($($ty:ty,)*) => {
             $(
-                impl <C: Context> ArgumentKind<C> for $ty {
+                impl <C> ArgumentKind<C> for $ty
+                where
+                    C: Context,
+                    C::Error: From<<$ty as FromStr>::Err>,
+                {
                     type Checker = FromStrChecker<Self>;
                     type Parser = FromStrParser<Self>;
                 }

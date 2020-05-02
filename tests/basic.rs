@@ -1,11 +1,28 @@
-use lieutenant::{command, CommandDispatcher, Context};
+use lieutenant::{command, provider, CommandDispatcher, Context};
 use thiserror::Error;
+use std::num;
 
 #[derive(Debug, Error, PartialEq)]
 enum Error {
     #[error("{0}")]
     Custom(String),
+    #[error("failed to parse int")]
+    ParsingInt,
 }
+
+impl From<num::ParseIntError> for Error
+{
+    fn from(_: num::ParseIntError) -> Self {
+        Error::ParsingInt
+    }
+}
+
+impl From<std::convert::Infallible> for Error {
+    fn from(_: std::convert::Infallible) -> Self {
+        panic!()
+    }
+}
+
 
 #[test]
 fn basic_command() {
@@ -18,7 +35,42 @@ fn basic_command() {
     }
 
     #[command(usage = "test <x>")]
-    fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+    async fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+        *ctx = State(x);
+        Ok(())
+    };
+
+    let dispatcher = CommandDispatcher::default().with(test);
+
+    let mut nodes = Vec::new();
+    let mut errors = Vec::new();
+
+    let mut x = State(0);
+    assert!(
+        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut x, "test 27")).is_ok()
+    );
+    assert_eq!(x, State(27));
+}
+
+#[test]
+fn basic_command_with_provider() {
+    #[derive(Debug, PartialEq, Eq)]
+    struct State(i32);
+
+    impl Context for State {
+        type Error = Error;
+        type Ok = ();
+    }
+
+    struct Value;
+
+    // #[provider]
+    async fn provde_value(ctx: &State) -> Result<Value, Error> {
+        Ok(Value)
+    }
+
+    #[command(usage = "test <x>")]
+    async fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
         *ctx = State(x);
         Ok(())
     };
@@ -57,7 +109,7 @@ fn basic_command_parralel() {
     }
 
     #[command(usage = "test <x>")]
-    fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+    async fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
         *ctx = State(x);
         Timer::after(Duration::from_secs(1)).await;
 
@@ -96,7 +148,7 @@ fn error_handling() {
     }
 
     #[command(usage = "test <x>")]
-    fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+    async fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
         if x == 0 {
             Ok(())
         } else {
@@ -132,7 +184,7 @@ fn multiple_args() {
     }
 
     #[command(usage = "test14 <new_x> <new_y> extra_literal")]
-    fn test14(state: &mut State, new_x: i32, new_y: String) -> Result<(), Error> {
+    async fn test14(state: &mut State, new_x: i32, new_y: String) -> Result<(), Error> {
         state.x = new_x;
         state.y = new_y;
         Ok(())
@@ -173,13 +225,13 @@ fn multiple_commands() {
     }
 
     #[command(usage = "cmd1 <new_x> extra_lit")]
-    fn cmd1(state: &mut State, new_x: i32) -> Result<(), Error> {
+    async fn cmd1(state: &mut State, new_x: i32) -> Result<(), Error> {
         state.x = new_x;
         Ok(())
     }
 
     #[command(usage = "cmd2 <new_y>")]
-    fn cmd2(state: &mut State, new_y: String) -> Result<(), Error> {
+    async fn cmd2(state: &mut State, new_y: String) -> Result<(), Error> {
         state.y = new_y;
         Ok(())
     }
@@ -239,19 +291,19 @@ fn command_macro() {
     }
 
     #[command(usage = "test <x>")]
-    fn test(state: &mut State, x: i32) -> Result<(), Error> {
+    async fn test(state: &mut State, x: i32) -> Result<(), Error> {
         state.x = x;
         Ok(())
     }
 
     #[command(usage = "foo <player>")]
-    fn foo_a_player(state: &mut State, player: String) -> Result<(), Error> {
+    async fn foo_a_player(state: &mut State, player: String) -> Result<(), Error> {
         state.player.push_str(&player);
         Ok(())
     }
 
     #[command(usage = "bar <player> <x>")]
-    fn foo_a_player_then_bar_an_x(state: &mut State, x: i32, player: String) -> Result<(), Error> {
+    async fn foo_a_player_then_bar_an_x(state: &mut State, x: i32, player: String) -> Result<(), Error> {
         state.player.push_str(&player);
         state.x = x + 1;
         Ok(())

@@ -4,7 +4,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::*;
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, Type};
+use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, Type, ReturnType, TypePath};
 
 #[derive(Debug, FromMeta)]
 struct Args {
@@ -25,6 +25,72 @@ enum Argument {
     Parameter { name: String, priority: usize },
     OptionalParameter { name: String, priority: usize },
     Literal { value: String },
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn provider(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let attr_args = parse_macro_input!(args as AttributeArgs);
+    let input = parse_macro_input!(input as ItemFn);
+
+    if !attr_args.is_empty() {
+        abort_call_site!("expected #[provider] with no paramters");
+    }
+
+    if let None = input.sig.asyncness {
+        abort_call_site!("command must be an async fn");
+    }
+
+    if let Some(first_generic) = input.sig.generics.params.iter().next() {
+        let help = first_generic
+            .as_type_param()
+            .map(|type_param| format!("remove the parameter {}", type_param.ident));
+        emit_error!(
+            first_generic.span(), "command functions may not have generic parameters";
+
+            help =? help;
+        );
+    }
+
+    let provider_ident = input.sig.ident;
+
+    let impl_header = if let Some((ok, error)) = parse_result(input.sig.output) {
+        quote! {
+            impl<C> lieutenant::Provider for #provider_ident
+            where
+                C: Context<Ok = #ok, Error = #error>,
+        }
+    } else {
+        abort_call_site!("provider must have a return type!");
+    };
+
+    let params = input.sig.inputs;
+
+    let block = input.block;
+
+    let ctx_type = quote! {};
+    let t = quote! {};
+
+    (quote! {
+        #impl_header {
+            fn provide<'a>(#params) -> Pin<Box<dyn Future<Output = Result<Self, C::Error>> + Send + Sync + 'a>> {
+                
+            }
+        }
+    }).into()
+}
+
+fn parse_result(output: ReturnType) -> Option<(TypePath, TypePath)> {
+    return None;
+    // let ReturnType::Type(_, kind) = output;
+    // let Type::Path(path) = *kind;
+    // let 
+
+    abort_call_site!("{:#?}", output);
+    unimplemented!()
 }
 
 #[proc_macro_error]
@@ -53,6 +119,10 @@ pub fn command(
             help =? help;
         );
     }
+
+    if let None = input.sig.asyncness {
+        abort_call_site!("command must be an async fn");
+    } 
 
     let usage = parse_usage(&args.usage);
     let parameters = collect_parameters(&usage, &input.sig.inputs.iter());

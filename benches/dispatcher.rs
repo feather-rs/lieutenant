@@ -2,8 +2,24 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lieutenant::{command, CommandDispatcher, Context};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
-enum Error {}
+#[derive(Debug, Error, PartialEq)]
+enum Error {
+    #[error("failed to parse int")]
+    ParsingInt,
+}
+
+impl From<std::num::ParseIntError> for Error
+{
+    fn from(_: std::num::ParseIntError) -> Self {
+        Error::ParsingInt
+    }
+}
+
+impl From<std::convert::Infallible> for Error {
+    fn from(_: std::convert::Infallible) -> Self {
+        panic!()
+    }
+}
 
 fn single_command(c: &mut Criterion) {
     struct State;
@@ -12,7 +28,7 @@ fn single_command(c: &mut Criterion) {
         type Ok = ();
     }
     #[command(usage = "command")]
-    fn command(_: &mut State) -> Result<(), Error> {
+    async fn command(_: &mut State) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
@@ -91,31 +107,31 @@ fn multiple_commands(c: &mut Criterion) {
         type Ok = ();
     }
     #[command(usage = "command")]
-    fn command_1(_state: &mut State) -> Result<(), Error> {
+    async fn command_1(_state: &mut State) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
 
     #[command(usage = "command <a>")]
-    fn command_2(_state: &mut State, _a: i32) -> Result<(), Error> {
+    async fn command_2(_state: &mut State, _a: i32) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
 
     #[command(usage = "command <a> <b>")]
-    fn command_3(_state: &mut State, _a: i32, _b: String) -> Result<(), Error> {
+    async fn command_3(_state: &mut State, _a: i32, _b: String) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
 
     #[command(usage = "command <a> <b>")]
-    fn command_4(_state: &mut State, _a: String, _b: String) -> Result<(), Error> {
+    async fn command_4(_state: &mut State, _a: String, _b: String) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
 
     #[command(usage = "command <a> <b> <c>")]
-    fn command_5(_state: &mut State, _a: i32, _b: i32, _c: i32) -> Result<(), Error> {
+    async fn command_5(_state: &mut State, _a: i32, _b: i32, _c: i32) -> Result<(), Error> {
         // thread::sleep(time::Duration::from_millis(1));
         Ok(())
     }
