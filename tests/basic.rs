@@ -265,7 +265,11 @@ fn command_macro() {
     }
 
     #[command(usage = "bar <player> <x>")]
-    async fn foo_a_player_then_bar_an_x(state: &mut State, x: i32, player: String) -> Result<(), Error> {
+    async fn foo_a_player_then_bar_an_x(
+        state: &mut State,
+        x: i32,
+        player: String,
+    ) -> Result<(), Error> {
         state.player.push_str(&player);
         state.x = x + 1;
         Ok(())

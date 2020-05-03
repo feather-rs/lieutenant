@@ -1,8 +1,8 @@
 use crate::Context;
 use std::any::Any;
+use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
-use std::borrow::Cow;
 
 pub type FutureBox<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
 
@@ -21,11 +21,7 @@ impl ParserUtil for &str {
 }
 
 pub trait ArgumentChecker<C>: Any + Send + 'static {
-    fn satisfies<'a, 'b>(
-        &self,
-        ctx: &C,
-        input: &'a mut &'b str,
-    ) -> FutureBox<'a, bool>;
+    fn satisfies<'a, 'b>(&self, ctx: &C, input: &'a mut &'b str) -> FutureBox<'a, bool>;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -57,14 +53,20 @@ pub trait ArgumentSuggester<C>
 where
     C: Context,
 {
-    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<Cow<'static, str>>>;
+    fn suggestions<'a, 'b, 'c>(
+        &'a self,
+        _ctx: &'b C,
+        _input: &'c str,
+    ) -> FutureBox<'c, Vec<Cow<'static, str>>>;
 }
 
 impl<C: Context> ArgumentSuggester<C> for () {
-    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<Cow<'static, str>>> {
-        Box::pin(async {
-            Vec::new()
-        })
+    fn suggestions<'a, 'b, 'c>(
+        &'a self,
+        _ctx: &'b C,
+        _input: &'c str,
+    ) -> FutureBox<'c, Vec<Cow<'static, str>>> {
+        Box::pin(async { Vec::new() })
     }
 }
 
@@ -98,11 +100,7 @@ pub mod parsers {
     where
         T: FromStr + Clone + Send + 'static,
     {
-        fn satisfies<'a, 'b>(
-            &self,
-            _ctx: &C,
-            input: &'a mut &'b str,
-        ) -> FutureBox<'a, bool> {
+        fn satisfies<'a, 'b>(&self, _ctx: &C, input: &'a mut &'b str) -> FutureBox<'a, bool> {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 T::from_str(head).is_ok()
@@ -150,8 +148,7 @@ pub mod parsers {
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> FutureBox<'a, Result<Self::Output, C::Error>>
-        {
+        ) -> FutureBox<'a, Result<Self::Output, C::Error>> {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 Ok(T::from_str(head)?)
