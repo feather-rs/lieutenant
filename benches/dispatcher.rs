@@ -23,7 +23,7 @@ impl From<std::convert::Infallible> for Error {
 fn single_command(c: &mut Criterion) {
     struct State;
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
     #[command(usage = "command")]
@@ -102,7 +102,7 @@ fn single_command_prallel(_c: &mut Criterion) {
 fn multiple_commands(c: &mut Criterion) {
     struct State;
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
     #[command(usage = "command")]

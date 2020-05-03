@@ -27,7 +27,7 @@ fn basic_command() {
     struct State(i32);
 
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
 
@@ -66,7 +66,7 @@ fn basic_command_parallel() {
     struct State(i32);
 
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
 
@@ -105,7 +105,7 @@ fn error_handling() {
     struct State;
 
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
 
@@ -141,7 +141,7 @@ fn multiple_args() {
     }
 
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
 
@@ -182,7 +182,7 @@ fn multiple_commands() {
     }
 
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
 
@@ -248,7 +248,7 @@ fn command_macro() {
     }
 
     impl Context for State {
-        type Err = Error;
+        type Error = Error;
         type Ok = ();
     }
 

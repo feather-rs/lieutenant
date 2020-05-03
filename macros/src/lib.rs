@@ -43,8 +43,8 @@ pub fn command(
         ),
     };
 
-    if let None = input.sig.asyncness {
-        abort_call_site!("command must be async fn");
+    if input.sig.asyncness.is_none() {
+        emit_call_site_error!("command must be async fn")
     }
 
     if let Some(first_generic) = input.sig.generics.params.iter().next() {

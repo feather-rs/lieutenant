@@ -2,6 +2,7 @@ use crate::Context;
 use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
+use std::borrow::Cow;
 
 pub type FutureBox<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
 
@@ -46,7 +47,7 @@ pub trait ArgumentParser<C: Context>: Send + 'static {
         &self,
         ctx: &mut C,
         input: &'a mut &'b str,
-    ) -> FutureBox<'a, Result<Self::Output, C::Err>>;
+    ) -> FutureBox<'a, Result<Self::Output, C::Error>>;
     fn default() -> Self
     where
         Self: Sized;
@@ -56,11 +57,11 @@ pub trait ArgumentSuggester<C>
 where
     C: Context,
 {
-    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<String>>;
+    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<Cow<'static, str>>>;
 }
 
 impl<C: Context> ArgumentSuggester<C> for () {
-    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<String>> {
+    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<Cow<'static, str>>> {
         Box::pin(async {
             Vec::new()
         })
@@ -140,7 +141,7 @@ pub mod parsers {
     impl<C, T> ArgumentParser<C> for FromStrParser<T>
     where
         C: Context,
-        C::Err: From<<T as FromStr>::Err>,
+        C::Error: From<<T as FromStr>::Err>,
         T: FromStr + Send + 'static,
     {
         type Output = T;
@@ -149,7 +150,7 @@ pub mod parsers {
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> FutureBox<'a, Result<Self::Output, C::Err>>
+        ) -> FutureBox<'a, Result<Self::Output, C::Error>>
         {
             Box::pin(async move {
                 let head = input.advance_until(" ");
@@ -171,7 +172,7 @@ pub mod parsers {
                 impl<C> ArgumentKind<C> for $ty
                 where
                     C: Context,
-                    C::Err: From<<$ty as FromStr>::Err>,
+                    C::Error: From<<$ty as FromStr>::Err>,
                 {
                     type Checker = FromStrChecker<Self>;
                     type Suggester = ();
