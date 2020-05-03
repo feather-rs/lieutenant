@@ -1,6 +1,6 @@
 use crate::Context;
 
-pub trait Provider<C: Context> {
+pub trait Provider<C: Context>: Default {
     type Output;
     type Error: Into<C::Error>;
 

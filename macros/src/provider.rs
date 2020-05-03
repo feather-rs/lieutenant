@@ -210,6 +210,7 @@ fn generate_provider(
 
     let tokens = quote! {
         #[allow(non_camel_case_types)]
+        #[derive(Default)]
         #vis struct #ident;
 
         #impl_head {

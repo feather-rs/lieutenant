@@ -3,6 +3,7 @@ use darling::FromMeta;
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::*;
 use quote::quote;
+use std::collections::HashMap;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, AttributeArgs, Block, FnArg, ItemFn, Pat, PatType, Type};
 
@@ -25,6 +26,13 @@ enum Argument {
     Parameter { name: String, priority: usize },
     OptionalParameter { name: String, priority: usize },
     Literal { values: Vec<String> },
+}
+
+/// The set of function parameters which should be obtained
+/// through providers.
+struct ProvidedParameters<'a> {
+    /// Mapping from parameter ident => `Provideable` type
+    map: HashMap<&'a Pat, &'a Type>,
 }
 
 pub fn command(
@@ -58,6 +66,7 @@ pub fn command(
 
     let usage = parse_usage(&args.usage);
     let parameters = collect_parameters(&usage, &input.sig.inputs.iter());
+    let provided_parameters = detect_provided_parameters(&input, &parameters);
 
     let ctx_type = detect_context_type(&parameters, input.sig.inputs.iter().next());
 
@@ -85,6 +94,7 @@ pub fn command(
         &parameters,
         ctx_type,
         &input.block,
+        &provided_parameters,
     );
     let visibility = &input.vis;
 
@@ -246,6 +256,34 @@ fn possible_parameter_idents(name: &str) -> Vec<String> {
     vec![name.to_owned(), format!("_{}", name)]
 }
 
+/// Determines which parameters need to be obtained
+/// through providers.
+fn detect_provided_parameters<'a>(
+    input: &'a ItemFn,
+    collected: &'a [&'a PatType],
+) -> ProvidedParameters<'a> {
+    // Determine which function parameters
+    // are neither the context type
+    // nor are obtained through command arguments.
+    let mut map = HashMap::new();
+
+    // Skip first parameter; it's the context parameter.
+    for param in input.sig.inputs.iter().skip(1) {
+        let param = match param {
+            FnArg::Typed(typ) => typ,
+            _ => unreachable!(),
+        };
+
+        if collected.contains(&param) {
+            continue;
+        }
+
+        map.insert(param.pat.as_ref(), param.ty.as_ref());
+    }
+
+    ProvidedParameters { map }
+}
+
 fn detect_context_type<'a>(
     parameter_types: &[&PatType],
     first_arg: Option<&'a FnArg>,
@@ -287,12 +325,18 @@ fn generate_command_spec(
     parameters: &[&PatType],
     ctx_type: Option<(&Type, &Pat)>,
     block: &Block,
+    provided: &ProvidedParameters,
 ) -> TokenStream {
     // let mut statements = vec![];
 
     let ctx_param = match ctx_type {
         Some((t, _)) => quote! { #t },
         None => quote! { C },
+    };
+
+    let ctx_ident = match ctx_type {
+        Some((_, id)) => quote! { #id },
+        None => quote! { __LIEUTENANT_CTX__ },
     };
 
     let mut arguments = vec![];
@@ -334,6 +378,7 @@ fn generate_command_spec(
 
     let args_ident = Ident::new("__LIEUTENANT_ARGS__", Span::call_site());
 
+    // Add arguments to parse_args
     let mut i = 0;
     for argument in usage.arguments.iter() {
         match argument {
@@ -360,9 +405,17 @@ fn generate_command_spec(
         }
     }
 
+    // Add provided parameters to parse_args
+    for (provided_ident, provided_typ) in &provided.map {
+        parse_args.push(quote! {
+            let #provided_ident = <<#provided_typ as lieutenant::Provideable<#ctx_param>>::Provider
+                as std::default::Default>::default().provide(#ctx_ident)?;
+        });
+    }
+
     let ctx_type = match ctx_type {
-        Some((t, name)) => quote! { #name: &mut #t },
-        None => quote! { _ctx: &mut C },
+        Some((t, _)) => quote! { #ctx_ident: &mut #t },
+        None => quote! { #ctx_ident: &mut C },
     };
 
     let description = match description {
@@ -381,7 +434,7 @@ fn generate_command_spec(
             arguments,
             description: #description,
             exec: |#ctx_type, mut #args_ident| Box::pin(async move {
-                use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
+                use lieutenant::{ArgumentParser as _, ArgumentChecker as _, Provider as _};
                 #(#parse_args)*
                 #block
             }),
