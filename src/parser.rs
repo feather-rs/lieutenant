@@ -56,6 +56,10 @@ pub trait ArgumentSugester<C>
 where
     C: Context,
 {
+    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<String>>;
+}
+
+impl<C: Context> ArgumentSugester<C> for () {
     fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<String>> {
         Box::pin(async {
             Vec::new()
@@ -65,6 +69,7 @@ where
 
 pub trait ArgumentKind<C: Context>: Sized + Send {
     type Checker: ArgumentChecker<C>;
+    type Suggester: ArgumentSugester<C>;
     type Parser: ArgumentParser<C, Output = Self>;
 }
 
@@ -169,6 +174,7 @@ pub mod parsers {
                     C::Err: From<<$ty as FromStr>::Err>,
                 {
                     type Checker = FromStrChecker<Self>;
+                    type Suggester = ();
                     type Parser = FromStrParser<Self>;
                 }
             )*
