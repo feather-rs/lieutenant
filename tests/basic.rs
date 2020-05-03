@@ -361,7 +361,7 @@ fn aliasing() {
         type Ok = ();
     }
     #[command(usage = "test|t <x> lit2|lit3")]
-    fn command(state: &mut State, x: u32) -> Result<(), Error> {
+    async fn command(state: &mut State, x: u32) -> Result<(), Error> {
         state.x = x;
         Ok(())
     }
