@@ -1,4 +1,5 @@
-use lieutenant::{command, CommandDispatcher, Context};
+use lieutenant::{command, provider, CommandDispatcher, Context};
+use std::convert::Infallible;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
@@ -396,6 +397,23 @@ fn aliasing() {
                 .is_err());
         }
     });
+}
+
+#[test]
+fn providers() {
+    struct State {
+        x: u32,
+    }
+
+    impl Context for State {
+        type Error = Infallible;
+        type Ok = ();
+    }
+
+    #[provider]
+    async fn infallible(ctx: &State) -> u32 {
+        ctx.x
+    }
 }
 
 #[test]
