@@ -323,6 +323,8 @@ fn generate_command_spec(
 
     let mut parse_args = vec![];
 
+    let args_ident = Ident::new("__LIEUTENANT_ARGS__", Span::call_site());
+
     let mut i = 0;
     for argument in usage.arguments.iter() {
         match argument {
@@ -337,13 +339,13 @@ fn generate_command_spec(
 
                 parse_args.push(quote! {
                     let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
-                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut args).await.unwrap();
+                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut #args_ident).await.unwrap();
                 });
 
                 i += 1;
             }
             Argument::Literal { value } => parse_args.push(quote! {
-                let head = args.advance_until(" ");
+                let head = #args_ident.advance_until(" ");
                 debug_assert_eq!(head, #value);
             }),
         }
@@ -369,9 +371,8 @@ fn generate_command_spec(
         lieutenant::CommandSpec {
             arguments,
             description: #description,
-            exec: |#ctx_type, args| Box::pin(async move {
+            exec: |#ctx_type, mut #args_ident| Box::pin(async move {
                 use lieutenant::{ArgumentParser as _, ArgumentChecker as _};
-                let mut args = args;
                 #(#parse_args)*
                 #block
             }),
