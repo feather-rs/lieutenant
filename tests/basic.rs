@@ -50,7 +50,7 @@ fn basic_command() {
 }
 
 #[test]
-fn basic_command_parralel() {
+fn basic_command_parallel() {
     use futures::future;
     use futures::join;
     use smol::Timer;
