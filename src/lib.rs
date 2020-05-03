@@ -9,6 +9,6 @@ pub use parser::{parsers, ArgumentChecker, ArgumentKind, ArgumentParser, ParserU
 
 /// Denotes a type that may be passed to commands as input.
 pub trait Context: Send + Sync + 'static {
-    type Error: std::error::Error + Send + Sync;
+    type Err: std::error::Error + Send + Sync;
     type Ok;
 }

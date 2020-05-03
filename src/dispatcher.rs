@@ -120,10 +120,10 @@ where
     pub async fn dispatch<'a, 'b, 'c>(
         &self,
         nodes: &'b mut Vec<(&'a str, NodeKey)>,
-        errors: &'c mut Vec<C::Error>,
+        errors: &'c mut Vec<C::Err>,
         ctx: &mut C,
         command: &'a str,
-    ) -> Result<C::Ok, &'c Vec<C::Error>> {
+    ) -> Result<C::Ok, &'c Vec<C::Err>> {
         nodes.clear();
         errors.clear();
 

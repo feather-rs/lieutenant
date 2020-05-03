@@ -5,6 +5,20 @@ use thiserror::Error;
 enum Error {
     #[error("{0}")]
     Custom(String),
+    #[error("failed to parse int")]
+    ParseInt,
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(_: std::num::ParseIntError) -> Self {
+        Error::ParseInt
+    }
+}
+
+impl From<std::convert::Infallible> for Error {
+    fn from(_: std::convert::Infallible) -> Self {
+        panic!("Cannot fail")
+    }
 }
 
 #[test]
@@ -13,7 +27,7 @@ fn basic_command() {
     struct State(i32);
 
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
 
@@ -52,7 +66,7 @@ fn basic_command_parralel() {
     struct State(i32);
 
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
 
@@ -91,7 +105,7 @@ fn error_handling() {
     struct State;
 
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
 
@@ -127,7 +141,7 @@ fn multiple_args() {
     }
 
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
 
@@ -168,7 +182,7 @@ fn multiple_commands() {
     }
 
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
 
@@ -234,7 +248,7 @@ fn command_macro() {
     }
 
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
 

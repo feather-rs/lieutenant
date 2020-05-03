@@ -87,7 +87,7 @@ pub type Exec<C> = for<'a> fn(
     &'a mut C,
     &'a str,
 ) -> Pin<
-    Box<dyn Future<Output = Result<<C as Context>::Ok, <C as Context>::Error>> + Send + 'a>,
+    Box<dyn Future<Output = Result<<C as Context>::Ok, <C as Context>::Err>> + Send + 'a>,
 >;
 
 pub struct CommandSpec<C: Context> {

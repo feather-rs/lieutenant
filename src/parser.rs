@@ -37,6 +37,8 @@ pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
     fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
 }
 
+type ArgumentParserFuture<'a, C, T> = Pin<Box<dyn Future<Output = Result<T, <C as Context>::Err>> + Send + Sync + 'a>>;
+
 pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
     type Output: Send + Sync;
 
@@ -44,7 +46,7 @@ pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
         &self,
         ctx: &mut C,
         input: &'a mut &'b str,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + 'a>>;
+    ) -> ArgumentParserFuture<'a, C, Self::Output>;
     fn default() -> Self
     where
         Self: Sized;
@@ -122,8 +124,8 @@ pub mod parsers {
     impl<C, T> ArgumentParser<C> for FromStrParser<T>
     where
         C: Context,
+        C::Err: From<<T as FromStr>::Err>,
         T: FromStr + Send + Sync + 'static,
-        <T as FromStr>::Err: std::error::Error + Send + Sync,
     {
         type Output = T;
 
@@ -131,7 +133,8 @@ pub mod parsers {
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> Pin<Box<dyn Future<Output = anyhow::Result<Self::Output>> + Send + 'a>> {
+        ) -> ArgumentParserFuture<'a, C, Self::Output>
+        {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 Ok(T::from_str(head)?)
@@ -149,7 +152,11 @@ pub mod parsers {
     macro_rules! from_str_argument_kind {
         ($($ty:ty,)*) => {
             $(
-                impl <C: Context> ArgumentKind<C> for $ty {
+                impl<C> ArgumentKind<C> for $ty
+                where
+                    C: Context,
+                    C::Err: From<<$ty as FromStr>::Err>,
+                {
                     type Checker = FromStrChecker<Self>;
                     type Parser = FromStrParser<Self>;
                 }

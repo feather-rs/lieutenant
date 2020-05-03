@@ -3,12 +3,27 @@ use lieutenant::{command, CommandDispatcher, Context};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-enum Error {}
+enum Error {
+    #[error("failed to parse int")]
+    ParseInt,
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(_: std::num::ParseIntError) -> Self {
+        Error::ParseInt
+    }
+}
+
+impl From<std::convert::Infallible> for Error {
+    fn from(_: std::convert::Infallible) -> Self {
+        panic!("Cannot fail")
+    }
+}
 
 fn single_command(c: &mut Criterion) {
     struct State;
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
     #[command(usage = "command")]
@@ -87,7 +102,7 @@ fn single_command_prallel(_c: &mut Criterion) {
 fn multiple_commands(c: &mut Criterion) {
     struct State;
     impl Context for State {
-        type Error = Error;
+        type Err = Error;
         type Ok = ();
     }
     #[command(usage = "command")]
