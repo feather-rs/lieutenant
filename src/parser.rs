@@ -3,6 +3,8 @@ use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
 
+pub type FutureBox<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
+
 pub trait ParserUtil {
     /// Advances the pointer until the given pattern and returns head and leaving the tail.
     fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str;
@@ -17,12 +19,12 @@ impl ParserUtil for &str {
     }
 }
 
-pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
+pub trait ArgumentChecker<C>: Any + Send + 'static {
     fn satisfies<'a, 'b>(
         &self,
         ctx: &C,
         input: &'a mut &'b str,
-    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
+    ) -> FutureBox<'a, bool>;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -37,22 +39,31 @@ pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
     fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
 }
 
-type ArgumentParserFuture<'a, C, T> = Pin<Box<dyn Future<Output = Result<T, <C as Context>::Err>> + Send + Sync + 'a>>;
-
-pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
-    type Output: Send + Sync;
+pub trait ArgumentParser<C: Context>: Send + 'static {
+    type Output: Send;
 
     fn parse<'a, 'b>(
         &self,
         ctx: &mut C,
         input: &'a mut &'b str,
-    ) -> ArgumentParserFuture<'a, C, Self::Output>;
+    ) -> FutureBox<'a, Result<Self::Output, C::Err>>;
     fn default() -> Self
     where
         Self: Sized;
 }
 
-pub trait ArgumentKind<C: Context>: Sized + Send + Sync {
+pub trait ArgumentSugester<C>
+where
+    C: Context,
+{
+    fn suggestions<'a, 'b, 'c>(&'a self, _ctx: &'b C, _input: &'c str) -> FutureBox<'c, Vec<String>> {
+        Box::pin(async {
+            Vec::new()
+        })
+    }
+}
+
+pub trait ArgumentKind<C: Context>: Sized + Send {
     type Checker: ArgumentChecker<C>;
     type Parser: ArgumentParser<C, Output = Self>;
 }
@@ -79,13 +90,13 @@ pub mod parsers {
 
     impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
     where
-        T: FromStr + Clone + Send + Sync + 'static,
+        T: FromStr + Clone + Send + 'static,
     {
         fn satisfies<'a, 'b>(
             &self,
             _ctx: &C,
             input: &'a mut &'b str,
-        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        ) -> FutureBox<'a, bool> {
             Box::pin(async move {
                 let head = input.advance_until(" ");
                 T::from_str(head).is_ok()
@@ -125,7 +136,7 @@ pub mod parsers {
     where
         C: Context,
         C::Err: From<<T as FromStr>::Err>,
-        T: FromStr + Send + Sync + 'static,
+        T: FromStr + Send + 'static,
     {
         type Output = T;
 
@@ -133,7 +144,7 @@ pub mod parsers {
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> ArgumentParserFuture<'a, C, Self::Output>
+        ) -> FutureBox<'a, Result<Self::Output, C::Err>>
         {
             Box::pin(async move {
                 let head = input.advance_until(" ");
