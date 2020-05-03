@@ -351,6 +351,54 @@ fn command_macro() {
 }
 
 #[test]
+fn aliasing() {
+    struct State {
+        x: u32,
+    }
+
+    impl Context for State {
+        type Error = Error;
+        type Ok = ();
+    }
+    #[command(usage = "test|t <x> lit2|lit3")]
+    fn command(state: &mut State, x: u32) -> Result<(), Error> {
+        state.x = x;
+        Ok(())
+    }
+
+    let dispatcher = CommandDispatcher::new().with(command);
+
+    let mut nodes = vec![];
+    let mut errors = vec![];
+
+    let mut state = State { x: 0 };
+
+    smol::block_on(async move {
+        assert!(dispatcher
+            .dispatch(&mut nodes, &mut errors, &mut state, "test 10 lit2")
+            .await
+            .is_ok());
+        assert_eq!(state.x, 10);
+
+        assert!(dispatcher
+            .dispatch(&mut nodes, &mut errors, &mut state, "t 15 lit3")
+            .await
+            .is_ok());
+        assert_eq!(state.x, 15);
+
+        for wrong in ["test 1 lit", "test 1", "t 2", "t 2 lit", "t string lit2"]
+            .iter()
+            .copied()
+        {
+            assert!(dispatcher
+                .dispatch(&mut nodes, &mut errors, &mut state, wrong)
+                .await
+                .is_err());
+        }
+    });
+}
+
+#[test]
 fn help_command() {
     // use std::borrow::Cow;
     // use std::rc::Rc;

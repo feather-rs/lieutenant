@@ -24,7 +24,7 @@ struct Usage {
 enum Argument {
     Parameter { name: String, priority: usize },
     OptionalParameter { name: String, priority: usize },
-    Literal { value: String },
+    Literal { values: Vec<String> },
 }
 
 #[proc_macro_error]
@@ -106,6 +106,11 @@ pub fn command(
 fn parse_usage(usage: &str) -> Usage {
     let mut arguments = vec![];
 
+    // Parse arguments by spaces. Each space-separared
+    // string can have one of the following meanings:
+    // <string>: a required, named parameter
+    // [string]: an optional, named parameter
+    // literal|literal2...: one or more possible literal parameters
     for splitted in usage.split(' ') {
         let (first, middle) = splitted.split_at(1.min(splitted.len()));
         let (middle, last) = middle.split_at(middle.len() - 1);
@@ -118,9 +123,11 @@ fn parse_usage(usage: &str) -> Usage {
                 name: param.to_owned(),
                 priority: 0,
             }),
-            (_, _, _) => arguments.push(Argument::Literal {
-                value: splitted.to_owned(),
-            }),
+            (_, _, _) => {
+                // Parse literals: individual values are separated by the pipe operator.
+                let values = splitted.split('|').map(String::from).collect::<Vec<_>>();
+                arguments.push(Argument::Literal { values });
+            }
         }
     }
 
@@ -311,10 +318,10 @@ fn generate_command_spec(
                     }
                 }
             }
-            Argument::Literal { value } => {
+            Argument::Literal { values } => {
                 quote! {
                     lieutenant::Argument::Literal {
-                        value: #value.into(),
+                        values: [#(#values),*].iter().copied().map(std::borrow::Cow::from).collect(),
                     }
                 }
             }
@@ -348,9 +355,9 @@ fn generate_command_spec(
 
                 i += 1;
             }
-            Argument::Literal { value } => parse_args.push(quote! {
+            Argument::Literal { values } => parse_args.push(quote! {
                 let head = #args_ident.advance_until(" ");
-                debug_assert_eq!(head, #value);
+                debug_assert!([#(#values),*].contains(&head));
             }),
         }
     }

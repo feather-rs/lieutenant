@@ -134,7 +134,10 @@ where
         while let Some((mut input, node_key)) = nodes.pop() {
             let node = &self.nodes[*node_key];
             let satisfies = match &node.argument {
-                Argument::Literal { value } => value == input.advance_until(" "),
+                Argument::Literal { values } => {
+                    let parsed = input.advance_until(" ");
+                    values.iter().any(|value| value == parsed)
+                }
                 Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input).await,
             };
 

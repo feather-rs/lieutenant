@@ -1,4 +1,5 @@
 use crate::{ArgumentChecker, Context};
+use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::future::Future;
@@ -11,7 +12,7 @@ pub trait Command<C: Context> {
 
 pub enum Argument<C: Context> {
     Literal {
-        value: Cow<'static, str>,
+        values: SmallVec<[Cow<'static, str>; 2]>,
     },
     Parser {
         name: Cow<'static, str>,
@@ -32,8 +33,8 @@ impl<C: Context> Argument<C> {
 impl<C: Context> Clone for Argument<C> {
     fn clone(&self) -> Self {
         match self {
-            Argument::Literal { value } => Argument::Literal {
-                value: value.clone(),
+            Argument::Literal { values } => Argument::Literal {
+                values: values.clone(),
             },
             Argument::Parser {
                 name,
@@ -54,7 +55,7 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Argument::Literal { value }, Argument::Literal { value: other }) => value == other,
+            (Argument::Literal { values }, Argument::Literal { values: other }) => values == other,
             (Argument::Parser { checker, .. }, Argument::Parser { checker: other, .. }) => {
                 checker.equals(other)
             }
