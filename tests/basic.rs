@@ -1,4 +1,5 @@
-use lieutenant::{command, CommandDispatcher, Context};
+use lieutenant::{command, provider, CommandDispatcher, Context, Provideable};
+use std::convert::Infallible;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
@@ -395,6 +396,45 @@ fn aliasing() {
                 .await
                 .is_err());
         }
+    });
+}
+
+#[test]
+fn providers() {
+    struct State {
+        x: u32,
+    }
+
+    impl Context for State {
+        type Error = Infallible;
+        type Ok = ();
+    }
+
+    struct Provided(u32);
+    impl Provideable<State> for Provided {
+        type Provider = provide_u32;
+    }
+
+    #[provider]
+    async fn provide_u32(ctx: &State) -> Provided {
+        Provided(ctx.x)
+    }
+
+    #[command(usage = "test")]
+    async fn cmd(ctx: &mut State, provided: Provided) -> Result<(), Infallible> {
+        ctx.x += provided.0;
+        Ok(())
+    }
+
+    let mut state = State { x: 15 };
+    let dispatcher = CommandDispatcher::new().with(cmd);
+
+    smol::block_on(async move {
+        assert!(dispatcher
+            .dispatch(&mut Vec::new(), &mut Vec::new(), &mut state, "test")
+            .await
+            .is_ok());
+        assert_eq!(state.x, 30);
     });
 }
 
