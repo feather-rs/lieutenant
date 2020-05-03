@@ -43,6 +43,10 @@ pub fn command(
         ),
     };
 
+    if input.sig.asyncness.is_none() {
+        emit_call_site_error!("command must be async fn")
+    }
+
     if let Some(first_generic) = input.sig.generics.params.iter().next() {
         let help = first_generic
             .as_type_param()
