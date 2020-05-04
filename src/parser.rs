@@ -1,187 +1,88 @@
 use crate::Context;
-use async_trait::async_trait;
-use std::any::Any;
-use std::borrow::Cow;
 
-pub trait ParserUtil {
-    /// Advances the pointer until the given pattern and returns head and leaving the tail.
-    fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str;
+/// The input type, acting like a stream of characters.
+#[derive(Copy, Clone, Debug)]
+pub struct Input<'a> {
+    ptr: &'a str,
 }
 
-impl ParserUtil for &str {
-    #[inline]
-    fn advance_until<'a, 'b>(&'a mut self, pat: &'b str) -> &'a str {
-        let head = self.split(pat).next().unwrap_or("");
-        *self = &self[(head.len() + pat.len()).min(self.len())..];
+impl<'a> Input<'a> {
+    pub fn new(ptr: &'a str) -> Self {
+        Self { ptr }
+    }
+
+    /// Advances the pointer until the given pattern has been reached, returning
+    /// the consumed characters.
+    pub fn advance_until(&mut self, pat: &str) -> &str {
+        let head = self.ptr.split(pat).next().unwrap_or("");
+        self.ptr = &self.ptr[(head.len() + pat.len()).min(self.ptr.len())..];
         head
     }
-}
 
-#[async_trait]
-pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
-    async fn satisfies<'a, 'b>(&self, ctx: &C, input: &'a mut &'b str) -> bool;
-    /// Returns whether this `ArgumentChecker` will perform
-    /// the same operation as some other `ArgumentChecker`.
-    ///
-    /// This is a workaround for the fact that `PartialEq` and `Eq`
-    /// cannot be boxed into trait objects.
-    fn equals(&self, other: &dyn Any) -> bool;
+    /// Returns the number of remaining characters to read.
+    pub fn len(&self) -> usize {
+        self.ptr.len()
+    }
 
-    fn default() -> Self
-    where
-        Self: Sized;
-
-    fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
-}
-
-#[async_trait]
-pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
-    type Output: Send;
-
-    async fn parse<'a, 'b>(
-        &self,
-        ctx: &mut C,
-        input: &'a mut &'b str,
-    ) -> Result<Self::Output, C::Error>;
-
-    fn default() -> Self
-    where
-        Self: Sized;
-}
-
-#[async_trait]
-pub trait ArgumentSuggester<C>: Send + Sync
-where
-    C: Context,
-{
-    async fn suggestions<'a, 'b, 'c>(
-        &'a self,
-        _ctx: &'b C,
-        _input: &'c str,
-    ) -> Vec<Cow<'static, str>>;
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)] // bug in async-trait
-#[async_trait]
-impl<C: Context> ArgumentSuggester<C> for () {
-    async fn suggestions<'a, 'b, 'c>(
-        &'a self,
-        _ctx: &'b C,
-        _input: &'c str,
-    ) -> Vec<Cow<'static, str>> {
-        Vec::new()
+    /// Returns whether there are no more characters to read.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
-pub trait ArgumentKind<C: Context>: Sized + Send {
-    type Checker: ArgumentChecker<C>;
-    type Suggester: ArgumentSuggester<C>;
-    type Parser: ArgumentParser<C, Output = Self>;
+/// Denotes a type which can be used as a command _argument_.
+///
+/// The type must define the following functions:
+/// * `satisfies`, returning whether the given input is
+/// a valid instance of this argument.
+pub trait ArgumentKind<C: Context>: Sized {
+    /// The error type returned by `Parse`.
+    ///
+    /// Must implement `Into<C::Error>`.
+    type ParseError: Into<C::Error>;
+
+    /// Returns whether the given input is a valid
+    /// instance of this argument. Should advance the
+    /// pointer to `input` by the number of characters read.
+    ///
+    /// This can be performed conveniently using the `ParserUtil`
+    /// trait.
+    fn satisfies<'a>(ctx: &C, input: &mut Input<'a>) -> bool;
+
+    /// Parses a value of this type from the given stream of characters.
+    ///
+    /// Should advance the pointer to `input` by the number of characters read.
+    fn parse<'a>(ctx: &C, input: &mut Input<'a>) -> Result<Self, Self::ParseError>;
 }
 
-pub mod parsers {
+pub type SatisfiesFn<C> = fn(&C, &mut Input) -> bool;
+
+mod arguments {
     use super::*;
-    use std::marker::PhantomData;
     use std::num::*;
     use std::path::PathBuf;
     use std::str::FromStr;
 
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub struct FromStrChecker<T> {
-        _phantom: PhantomData<T>,
-    }
-
-    impl<T> Default for FromStrChecker<T> {
-        fn default() -> Self {
-            Self {
-                _phantom: PhantomData,
-            }
-        }
-    }
-
-    #[async_trait]
-    impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
-    where
-        T: FromStr + Clone + Send + Sync + 'static,
-        C: Context,
-    {
-        async fn satisfies<'a, 'b>(&self, _ctx: &C, input: &'a mut &'b str) -> bool {
-            let head = input.advance_until(" ");
-            T::from_str(head).is_ok()
-        }
-
-        fn equals(&self, other: &dyn Any) -> bool {
-            other.downcast_ref::<Self>().is_some()
-        }
-
-        fn default() -> Self
-        where
-            Self: Sized,
-        {
-            <Self as Default>::default()
-        }
-
-        fn box_clone(&self) -> Box<dyn ArgumentChecker<C>> {
-            Box::new(self.clone())
-        }
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub struct FromStrParser<T> {
-        _phantom: PhantomData<T>,
-    }
-
-    impl<T> Default for FromStrParser<T> {
-        fn default() -> Self {
-            Self {
-                _phantom: PhantomData,
-            }
-        }
-    }
-
-    #[async_trait]
-    impl<C, T> ArgumentParser<C> for FromStrParser<T>
-    where
-        C: Context,
-        C::Error: From<<T as FromStr>::Err>,
-        T: FromStr + Send + Sync + 'static,
-    {
-        type Output = T;
-
-        async fn parse<'a, 'b>(
-            &self,
-            _ctx: &mut C,
-            input: &'a mut &'b str,
-        ) -> Result<Self::Output, C::Error> {
-            let head = input.advance_until(" ");
-            Ok(T::from_str(head)?)
-        }
-
-        fn default() -> Self
-        where
-            Self: Sized,
-        {
-            <Self as Default>::default()
-        }
-    }
-
-    macro_rules! from_str_argument_kind {
-        ($($ty:ty,)*) => {
+    macro_rules! from_str_argument {
+        ($($ty:ty,)* $(,)?) => {
             $(
-                impl<C> ArgumentKind<C> for $ty
-                where
-                    C: Context,
-                    C::Error: From<<$ty as FromStr>::Err>,
-                {
-                    type Checker = FromStrChecker<Self>;
-                    type Suggester = ();
-                    type Parser = FromStrParser<Self>;
+                impl <C> ArgumentKind<C> for $ty where C: Context, C::Error: From<<$ty as FromStr>::Err> {
+                    type ParseError = <$ty as FromStr>::Err;
+
+                    fn satisfies<'a>(ctx: &C, input: &mut Input<'a>) -> bool {
+                        Self::parse(ctx, input).is_ok()
+                    }
+
+                    fn parse<'a>(_ctx: &C, input: &mut Input<'a>) -> Result<Self, Self::ParseError> {
+                        let head = input.advance_until(" ");
+                        Ok(Self::from_str(head)?)
+                    }
                 }
             )*
         }
     }
 
-    from_str_argument_kind!(
+    from_str_argument!(
         i8,
         i16,
         i32,

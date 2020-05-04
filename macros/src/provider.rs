@@ -59,15 +59,15 @@ fn verify_input(input: &ItemFn) {
         );
     }
 
-    // must be async
-    if input.sig.asyncness.is_none() {
-        let span = input.sig.fn_token.span();
+    // must not be async
+    if let Some(asyncness) = input.sig.asyncness {
+        let span = asyncness.span();
         let name = &input.sig.ident;
 
         emit_error!(
-            span, "provider function must be `async`";
+            span, "provider function must not be `async`";
 
-            help = "make the function async: `async fn {}`", name
+            help = "remove the `async` keyword: `fn {}`", name
         );
     }
 }
