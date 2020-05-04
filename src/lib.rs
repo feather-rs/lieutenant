@@ -10,7 +10,7 @@ pub use parser::{parsers, ArgumentChecker, ArgumentKind, ArgumentParser, ParserU
 pub use provider::{Provideable, Provider};
 
 /// Denotes a type that may be passed to commands as input.
-pub trait Context: Send + 'static {
-    type Error: std::error::Error + Send;
+pub trait Context: Send + Sync + 'static {
+    type Error: Send;
     type Ok;
 }

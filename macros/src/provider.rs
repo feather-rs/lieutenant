@@ -137,7 +137,7 @@ fn detect_output(input: &ItemFn) -> OutputType {
 
                     let last_segment = path.segments.iter().last().unwrap();
 
-                    if last_segment.ident.to_string() == "Result" {
+                    if last_segment.ident == "Result" {
                         match &last_segment.arguments {
                             PathArguments::None | PathArguments::Parenthesized(_) => abort!(
                                 last_segment.span(),

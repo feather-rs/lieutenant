@@ -1,10 +1,7 @@
 use crate::Context;
+use async_trait::async_trait;
 use std::any::Any;
 use std::borrow::Cow;
-use std::future::Future;
-use std::pin::Pin;
-
-pub type FutureBox<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
 
 pub trait ParserUtil {
     /// Advances the pointer until the given pattern and returns head and leaving the tail.
@@ -20,8 +17,9 @@ impl ParserUtil for &str {
     }
 }
 
-pub trait ArgumentChecker<C>: Any + Send + 'static {
-    fn satisfies<'a, 'b>(&self, ctx: &C, input: &'a mut &'b str) -> FutureBox<'a, bool>;
+#[async_trait]
+pub trait ArgumentChecker<C>: Any + Send + Sync + 'static {
+    async fn satisfies<'a, 'b>(&self, ctx: &C, input: &'a mut &'b str) -> bool;
     /// Returns whether this `ArgumentChecker` will perform
     /// the same operation as some other `ArgumentChecker`.
     ///
@@ -36,37 +34,42 @@ pub trait ArgumentChecker<C>: Any + Send + 'static {
     fn box_clone(&self) -> Box<dyn ArgumentChecker<C>>;
 }
 
-pub trait ArgumentParser<C: Context>: Send + 'static {
+#[async_trait]
+pub trait ArgumentParser<C: Context>: Send + Sync + 'static {
     type Output: Send;
 
-    fn parse<'a, 'b>(
+    async fn parse<'a, 'b>(
         &self,
         ctx: &mut C,
         input: &'a mut &'b str,
-    ) -> FutureBox<'a, Result<Self::Output, C::Error>>;
+    ) -> Result<Self::Output, C::Error>;
+
     fn default() -> Self
     where
         Self: Sized;
 }
 
-pub trait ArgumentSuggester<C>
+#[async_trait]
+pub trait ArgumentSuggester<C>: Send + Sync
 where
     C: Context,
 {
-    fn suggestions<'a, 'b, 'c>(
+    async fn suggestions<'a, 'b, 'c>(
         &'a self,
         _ctx: &'b C,
         _input: &'c str,
-    ) -> FutureBox<'c, Vec<Cow<'static, str>>>;
+    ) -> Vec<Cow<'static, str>>;
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // bug in async-trait
+#[async_trait]
 impl<C: Context> ArgumentSuggester<C> for () {
-    fn suggestions<'a, 'b, 'c>(
+    async fn suggestions<'a, 'b, 'c>(
         &'a self,
         _ctx: &'b C,
         _input: &'c str,
-    ) -> FutureBox<'c, Vec<Cow<'static, str>>> {
-        Box::pin(async { Vec::new() })
+    ) -> Vec<Cow<'static, str>> {
+        Vec::new()
     }
 }
 
@@ -96,15 +99,15 @@ pub mod parsers {
         }
     }
 
+    #[async_trait]
     impl<C, T> ArgumentChecker<C> for FromStrChecker<T>
     where
-        T: FromStr + Clone + Send + 'static,
+        T: FromStr + Clone + Send + Sync + 'static,
+        C: Context,
     {
-        fn satisfies<'a, 'b>(&self, _ctx: &C, input: &'a mut &'b str) -> FutureBox<'a, bool> {
-            Box::pin(async move {
-                let head = input.advance_until(" ");
-                T::from_str(head).is_ok()
-            })
+        async fn satisfies<'a, 'b>(&self, _ctx: &C, input: &'a mut &'b str) -> bool {
+            let head = input.advance_until(" ");
+            T::from_str(head).is_ok()
         }
 
         fn equals(&self, other: &dyn Any) -> bool {
@@ -136,23 +139,22 @@ pub mod parsers {
         }
     }
 
+    #[async_trait]
     impl<C, T> ArgumentParser<C> for FromStrParser<T>
     where
         C: Context,
         C::Error: From<<T as FromStr>::Err>,
-        T: FromStr + Send + 'static,
+        T: FromStr + Send + Sync + 'static,
     {
         type Output = T;
 
-        fn parse<'a, 'b>(
+        async fn parse<'a, 'b>(
             &self,
             _ctx: &mut C,
             input: &'a mut &'b str,
-        ) -> FutureBox<'a, Result<Self::Output, C::Error>> {
-            Box::pin(async move {
-                let head = input.advance_until(" ");
-                Ok(T::from_str(head)?)
-            })
+        ) -> Result<Self::Output, C::Error> {
+            let head = input.advance_until(" ");
+            Ok(T::from_str(head)?)
         }
 
         fn default() -> Self

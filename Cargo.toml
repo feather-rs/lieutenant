@@ -11,6 +11,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 slab = "0.4"
 smallvec = "1.4"
+async-trait = "0.1"
 
 [dev-dependencies]
 criterion = "0.3"
