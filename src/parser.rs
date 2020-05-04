@@ -13,7 +13,7 @@ impl<'a> Input<'a> {
 
     /// Advances the pointer until the given pattern has been reached, returning
     /// the consumed characters.
-    pub fn advance_until(&mut self, pat: &str) -> &str {
+    pub fn advance_until<'b>(&'b mut self, pat: &str) -> &'a str {
         let head = self.ptr.split(pat).next().unwrap_or("");
         self.ptr = &self.ptr[(head.len() + pat.len()).min(self.ptr.len())..];
         head
