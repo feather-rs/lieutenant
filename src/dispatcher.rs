@@ -1,4 +1,4 @@
-use crate::{command::Exec, Argument, Command, CommandSpec, Context, ParserUtil};
+use crate::{command::Exec, Argument, Command, CommandSpec, Context, Input};
 use slab::Slab;
 use smallvec::SmallVec;
 
@@ -23,8 +23,12 @@ impl std::ops::Deref for NodeKey {
 
 /// Data structure used to dispatch commands.
 pub struct CommandDispatcher<C: Context> {
+    // This structure acts as the root node.
+    /// Stores all nodes in the command graph.
     nodes: Slab<Node<C>>,
+    /// Children of the root node.
     children: SmallVec<[NodeKey; 4]>,
+    /// Vector of all commands registered to this dispatcher.
     commands: Vec<CommandSpec<C>>,
 }
 
@@ -77,7 +81,7 @@ where
         }
 
         for argument in arguments {
-            let child = Node::from(argument.clone());
+            let child = Node::from((*argument).clone());
             let child_key = NodeKey(self.nodes.insert(child));
 
             if let Some(node_key) = node_key {
@@ -117,18 +121,12 @@ where
     }
 
     /// Dispatches a command. Returns whether a command was executed.
-    pub async fn dispatch<'a, 'b, 'c>(
-        &self,
-        nodes: &'b mut Vec<(&'a str, NodeKey)>,
-        errors: &'c mut Vec<C::Error>,
-        ctx: &mut C,
-        command: &'a str,
-    ) -> Result<C::Ok, &'c Vec<C::Error>> {
-        nodes.clear();
-        errors.clear();
+    pub fn dispatch(&self, ctx: &mut C, command: &str) -> Result<C::Ok, Vec<C::Error>> {
+        let mut nodes = Vec::new();
+        let mut errors = Vec::new();
 
         for child_key in &self.children {
-            nodes.push((&command, *child_key));
+            nodes.push((Input::new(command), *child_key));
         }
 
         while let Some((mut input, node_key)) = nodes.pop() {
@@ -138,12 +136,12 @@ where
                     let parsed = input.advance_until(" ");
                     values.iter().any(|value| value == parsed)
                 }
-                Argument::Parser { checker, .. } => checker.satisfies(ctx, &mut input).await,
+                Argument::Parser { satisfies, .. } => satisfies(ctx, &mut input),
             };
 
             if input.is_empty() && satisfies {
                 for exec in &node.execs {
-                    match exec(ctx, command).await {
+                    match exec(ctx, command) {
                         Ok(ok) => return Ok(ok),
                         Err(err) => errors.push(err),
                     }
@@ -153,11 +151,11 @@ where
 
             if satisfies {
                 for child_key in &node.children {
-                    nodes.push((&mut input, *child_key));
+                    nodes.push((input, *child_key));
                 }
             }
         }
-        Err(&*errors)
+        Err(errors)
     }
 
     pub fn commands(&self) -> impl Iterator<Item = &CommandSpec<C>> {

@@ -49,8 +49,8 @@ pub fn command(
         ),
     };
 
-    if input.sig.asyncness.is_none() {
-        emit_call_site_error!("command must be async fn")
+    if let Some(asyncness) = input.sig.asyncness {
+        emit_error!(asyncness.span(), "command function may not be `async`");
     }
 
     if let Some(first_generic) = input.sig.generics.params.iter().next() {
@@ -354,8 +354,8 @@ fn generate_command_spec(
                 quote! {
                     lieutenant::Argument::Parser {
                         name: #name.into(),
-                        checker: Box::new(<<#ty as lieutenant::ArgumentKind<#ctx_param>>::Checker
-                            as lieutenant::ArgumentChecker<#ctx_param>>::default()),
+                        satisfies: <#ty as lieutenant::ArgumentKind<#ctx_param>>::satisfies,
+                        argument_type: std::any::TypeId::of::<#ty>(),
                         priority: #priority,
                     }
                 }
@@ -392,8 +392,7 @@ fn generate_command_spec(
                 };
 
                 parse_args.push(quote! {
-                    let #ident = <<#ty as lieutenant::ArgumentKind<#ctx_param>>::Parser
-                    as lieutenant::ArgumentParser<#ctx_param>>::default().parse(#ctx_ident, &mut #args_ident).await.unwrap();
+                    let #ident = <#ty as lieutenant::ArgumentKind<#ctx_param>>::parse(#ctx_ident, &mut #args_ident)?;
                 });
 
                 i += 1;
@@ -426,18 +425,18 @@ fn generate_command_spec(
     let arguments_len = arguments.len();
 
     let res = quote! {
-        use lieutenant::ParserUtil;
         let mut arguments = Vec::with_capacity(#arguments_len);
         #(#arguments)*
 
         lieutenant::CommandSpec {
             arguments,
             description: #description,
-            exec: |#ctx_type, mut #args_ident| Box::pin(async move {
-                use lieutenant::{ArgumentParser as _, ArgumentChecker as _, Provider as _};
+            exec: |#ctx_type, #args_ident| {
+                let mut #args_ident = lieutenant::Input::new(#args_ident);
+                use lieutenant::{ArgumentKind as _, Provider as _};
                 #(#parse_args)*
                 #block
-            }),
+            },
         }
     };
     res

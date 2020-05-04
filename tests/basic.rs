@@ -33,24 +33,19 @@ fn basic_command() {
     }
 
     #[command(usage = "test <x>")]
-    async fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+    fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
         *ctx = State(x);
         Ok(())
     };
 
     let dispatcher = CommandDispatcher::default().with(test);
 
-    let mut nodes = Vec::new();
-    let mut errors = Vec::new();
-
     let mut x = State(0);
-    assert!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut x, "test 27")).is_ok()
-    );
+    assert!(dispatcher.dispatch(&mut x, "test 27").is_ok());
     assert_eq!(x, State(27));
 }
 
-#[test]
+/*#[test]
 fn basic_command_parallel() {
     use futures::future;
     use futures::join;
@@ -98,7 +93,7 @@ fn basic_command_parallel() {
     assert_eq!(smol::run(async { join!(call_a, call_b) }), (Ok(()), Ok(())));
 
     assert_eq!(now.elapsed().as_secs(), 1);
-}
+}*/
 
 #[test]
 fn error_handling() {
@@ -111,7 +106,7 @@ fn error_handling() {
     }
 
     #[command(usage = "test <x>")]
-    async fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
+    fn test(ctx: &mut State, x: i32) -> Result<(), Error> {
         if x == 0 {
             Ok(())
         } else {
@@ -121,16 +116,10 @@ fn error_handling() {
 
     let dispatcher = CommandDispatcher::default().with(test);
 
-    let mut nodes = Vec::new();
-    let mut errors = Vec::new();
-
+    assert_eq!(dispatcher.dispatch(&mut State, "test 0"), Ok(()));
     assert_eq!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "test 0")),
-        Ok(())
-    );
-    assert_eq!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut State, "test 5")),
-        Err(&vec![Error::Custom("Not zero".into())])
+        dispatcher.dispatch(&mut State, "test 5"),
+        Err(vec![Error::Custom("Not zero".into())])
     );
 }
 
@@ -147,7 +136,7 @@ fn multiple_args() {
     }
 
     #[command(usage = "test14 <new_x> <new_y> extra_literal")]
-    async fn test14(state: &mut State, new_x: i32, new_y: String) -> Result<(), Error> {
+    fn test14(state: &mut State, new_x: i32, new_y: String) -> Result<(), Error> {
         state.x = new_x;
         state.y = new_y;
         Ok(())
@@ -156,20 +145,13 @@ fn multiple_args() {
     let mut dispatcher = CommandDispatcher::default();
     dispatcher.register(test14).unwrap();
 
-    let mut nodes = Vec::new();
-    let mut errors = Vec::new();
-
     let mut state = State {
         x: 690_854,
         y: String::from("wrong"),
     };
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "test14 66 string extra_literal"
-    ))
-    .is_ok());
+    assert!(dispatcher
+        .dispatch(&mut state, "test14 66 string extra_literal")
+        .is_ok());
 
     assert_eq!(state.x, 66);
     assert_eq!(state.y.as_str(), "string");
@@ -188,56 +170,34 @@ fn multiple_commands() {
     }
 
     #[command(usage = "cmd1 <new_x> extra_lit")]
-    async fn cmd1(state: &mut State, new_x: i32) -> Result<(), Error> {
+    fn cmd1(state: &mut State, new_x: i32) -> Result<(), Error> {
         state.x = new_x;
         Ok(())
     }
 
     #[command(usage = "cmd2 <new_y>")]
-    async fn cmd2(state: &mut State, new_y: String) -> Result<(), Error> {
+    fn cmd2(state: &mut State, new_y: String) -> Result<(), Error> {
         state.y = new_y;
         Ok(())
     }
 
     let dispatcher = CommandDispatcher::default().with(cmd1).with(cmd2);
 
-    let mut nodes = Vec::new();
-    let mut errors = Vec::new();
-
     let mut state = State {
         x: 32,
         y: String::from("incorrect"),
     };
 
-    assert!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "cmd1 10"))
-            .is_err()
-    ); // misssing extra_lit
+    assert!(dispatcher.dispatch(&mut state, "cmd1 10").is_err()); // misssing extra_lit
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "cmd1 10 extra_lit"
-    ))
-    .is_ok());
+    assert!(dispatcher.dispatch(&mut state, "cmd1 10 extra_lit").is_ok());
     assert_eq!(state.x, 10);
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "invalid command 22"
-    ))
-    .is_err());
+    assert!(dispatcher
+        .dispatch(&mut state, "invalid command 22")
+        .is_err());
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "cmd2 new_string"
-    ))
-    .is_ok());
+    assert!(dispatcher.dispatch(&mut state, "cmd2 new_string").is_ok());
     assert_eq!(state.y.as_str(), "new_string");
 }
 
@@ -254,23 +214,19 @@ fn command_macro() {
     }
 
     #[command(usage = "test <x>")]
-    async fn test(state: &mut State, x: i32) -> Result<(), Error> {
+    fn test(state: &mut State, x: i32) -> Result<(), Error> {
         state.x = x;
         Ok(())
     }
 
     #[command(usage = "foo <player>")]
-    async fn foo_a_player(state: &mut State, player: String) -> Result<(), Error> {
+    fn foo_a_player(state: &mut State, player: String) -> Result<(), Error> {
         state.player.push_str(&player);
         Ok(())
     }
 
     #[command(usage = "bar <player> <x>")]
-    async fn foo_a_player_then_bar_an_x(
-        state: &mut State,
-        x: i32,
-        player: String,
-    ) -> Result<(), Error> {
+    fn foo_a_player_then_bar_an_x(state: &mut State, x: i32, player: String) -> Result<(), Error> {
         state.player.push_str(&player);
         state.x = x + 1;
         Ok(())
@@ -281,71 +237,31 @@ fn command_macro() {
         .with(foo_a_player)
         .with(foo_a_player_then_bar_an_x);
 
-    let mut errors = Vec::new();
-    let mut nodes = Vec::new();
-
     let mut state = State {
         x: 0,
         player: String::new(),
     };
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "false command"
-    ))
-    .is_err());
+    assert!(dispatcher.dispatch(&mut state, "false command").is_err());
 
-    assert!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "test 25")).is_ok()
-    );
+    assert!(dispatcher.dispatch(&mut state, "test 25").is_ok());
     assert_eq!(state.x, 25);
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "foo twenty-six"
-    ))
-    .is_ok());
+    assert!(dispatcher.dispatch(&mut state, "foo twenty-six").is_ok());
     assert_eq!(state.player.as_str(), "twenty-six");
 
-    assert!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "test")).is_err()
-    );
+    assert!(dispatcher.dispatch(&mut state, "test").is_err());
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "test not-a-number"
-    ))
-    .is_err());
+    assert!(dispatcher
+        .dispatch(&mut state, "test not-a-number")
+        .is_err());
 
-    assert!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "bar")).is_err()
-    );
+    assert!(dispatcher.dispatch(&mut state, "bar").is_err());
 
-    assert!(
-        smol::block_on(dispatcher.dispatch(&mut nodes, &mut errors, &mut state, "bar player"))
-            .is_err()
-    );
+    assert!(dispatcher.dispatch(&mut state, "bar player").is_err());
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "bar player four"
-    ))
-    .is_err());
+    assert!(dispatcher.dispatch(&mut state, "bar player four").is_err());
 
-    assert!(smol::block_on(dispatcher.dispatch(
-        &mut nodes,
-        &mut errors,
-        &mut state,
-        "bar PLAYER 28"
-    ))
-    .is_ok());
+    assert!(dispatcher.dispatch(&mut state, "bar PLAYER 28").is_ok());
 
     assert_eq!(state.x, 29);
     assert_eq!(state.player.as_str(), "twenty-sixPLAYER");
@@ -362,41 +278,27 @@ fn aliasing() {
         type Ok = ();
     }
     #[command(usage = "test|t <x> lit2|lit3")]
-    async fn command(state: &mut State, x: u32) -> Result<(), Error> {
+    fn command(state: &mut State, x: u32) -> Result<(), Error> {
         state.x = x;
         Ok(())
     }
 
     let dispatcher = CommandDispatcher::new().with(command);
 
-    let mut nodes = vec![];
-    let mut errors = vec![];
-
     let mut state = State { x: 0 };
 
-    smol::block_on(async move {
-        assert!(dispatcher
-            .dispatch(&mut nodes, &mut errors, &mut state, "test 10 lit2")
-            .await
-            .is_ok());
-        assert_eq!(state.x, 10);
+    assert!(dispatcher.dispatch(&mut state, "test 10 lit2").is_ok());
+    assert_eq!(state.x, 10);
 
-        assert!(dispatcher
-            .dispatch(&mut nodes, &mut errors, &mut state, "t 15 lit3")
-            .await
-            .is_ok());
-        assert_eq!(state.x, 15);
+    assert!(dispatcher.dispatch(&mut state, "t 15 lit3").is_ok());
+    assert_eq!(state.x, 15);
 
-        for wrong in ["test 1 lit", "test 1", "t 2", "t 2 lit", "t string lit2"]
-            .iter()
-            .copied()
-        {
-            assert!(dispatcher
-                .dispatch(&mut nodes, &mut errors, &mut state, wrong)
-                .await
-                .is_err());
-        }
-    });
+    for wrong in ["test 1 lit", "test 1", "t 2", "t 2 lit", "t string lit2"]
+        .iter()
+        .copied()
+    {
+        assert!(dispatcher.dispatch(&mut state, wrong).is_err());
+    }
 }
 
 #[test]
@@ -416,12 +318,12 @@ fn providers() {
     }
 
     #[provider]
-    async fn provide_u32(ctx: &State) -> Provided {
+    fn provide_u32(ctx: &State) -> Provided {
         Provided(ctx.x)
     }
 
     #[command(usage = "test")]
-    async fn cmd(ctx: &mut State, provided: Provided) -> Result<(), Infallible> {
+    fn cmd(ctx: &mut State, provided: Provided) -> Result<(), Infallible> {
         ctx.x += provided.0;
         Ok(())
     }
@@ -429,13 +331,8 @@ fn providers() {
     let mut state = State { x: 15 };
     let dispatcher = CommandDispatcher::new().with(cmd);
 
-    smol::block_on(async move {
-        assert!(dispatcher
-            .dispatch(&mut Vec::new(), &mut Vec::new(), &mut state, "test")
-            .await
-            .is_ok());
-        assert_eq!(state.x, 30);
-    });
+    assert!(dispatcher.dispatch(&mut state, "test").is_ok());
+    assert_eq!(state.x, 30);
 }
 
 #[test]
