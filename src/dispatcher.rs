@@ -1,6 +1,7 @@
 use crate::{command::Exec, Argument, Command, CommandSpec, Context, Input};
 use slab::Slab;
 use smallvec::SmallVec;
+use std::borrow::Cow;
 
 #[derive(Debug)]
 pub enum RegisterError {
@@ -19,6 +20,37 @@ impl std::ops::Deref for NodeKey {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+/// State of an ongoing dispatch request.
+///
+/// Dispatching is driven by the library user.
+/// When a command needs to be dispatched,
+/// call `CommandDispatcher::begin(command)`
+/// to get a `DispatchState`. Then, call
+/// `CommandDispatcher::drive(state)` until a command
+/// succeeds.
+pub struct DispatchState<'a> {
+    /// The entirety of the command being dispatched.
+    pub command: Cow<'a, str>,
+    /// The node stack, used for depth-first search.
+    ///
+    /// The first element of the tuple is the index
+    /// into `command` at which the remainder of the
+    /// input being parsed begins. The second
+    /// element is the node being handled.
+    nodes: Vec<(usize, NodeKey)>,
+}
+
+/// Returned by `CommandDispatcher::drive`.
+pub enum DriveResult<C: Context> {
+    /// Encountered an executable node
+    /// which may be executed. It is up
+    /// to the user to handle the actual
+    /// execution of the command.
+    Exec(Exec<C>),
+    /// No more commands to search.
+    Finished,
 }
 
 /// Data structure used to dispatch commands.
@@ -55,6 +87,7 @@ where
     pub fn register(&mut self, command: impl Command<C>) -> Result<(), RegisterError>
     where
         C: 'static,
+        <C as Context>::ArgumentPayload: Clone,
     {
         let spec = command.build();
 
@@ -96,7 +129,7 @@ where
 
         if let Some(key) = node_key {
             let node = &mut self.nodes[*key];
-            node.execs.push(spec.exec.clone());
+            node.exec = Some(spec.exec);
         } else {
             // Command with zero arguments?
             return Err(RegisterError::ExecutableRoot);
@@ -115,47 +148,59 @@ where
     pub fn with(mut self, command: impl Command<C>) -> Self
     where
         C: 'static,
+        <C as Context>::ArgumentPayload: Clone,
     {
         self.register(command).unwrap();
         self
     }
 
-    /// Dispatches a command. Returns whether a command was executed.
-    pub fn dispatch(&self, ctx: &mut C, command: &str) -> Result<C::Ok, Vec<C::Error>> {
-        let mut nodes = Vec::new();
-        let mut errors = Vec::new();
-
-        for child_key in &self.children {
-            nodes.push((Input::new(command), *child_key));
+    /// Begins dispatching a command by initializing
+    /// a `DispatchState`. The user may call `drive`
+    /// to continue driving command dispatch.
+    pub fn begin<'a>(&self, command: impl Into<Cow<'a, str>>) -> DispatchState<'a> {
+        DispatchState {
+            command: command.into(),
+            nodes: self
+                .children
+                .iter()
+                .copied()
+                .map(|child_key| (0, child_key))
+                .collect(),
         }
+    }
 
-        while let Some((mut input, node_key)) = nodes.pop() {
+    /// Drives dispatching of a command. Call `drive`
+    /// to first obtain a `DispatchState`.
+    pub fn drive(&self, state: &mut DispatchState) -> DriveResult<C> {
+        while let Some((cursor, node_key)) = state.nodes.pop() {
             let node = &self.nodes[*node_key];
-            let satisfies = match &node.argument {
+            let mut input = Input::new(&state.command[cursor..]);
+
+            let may_satisfy = match &node.argument {
                 Argument::Literal { values } => {
                     let parsed = input.advance_until(" ");
                     values.iter().any(|value| value == parsed)
                 }
-                Argument::Parser { satisfies, .. } => satisfies(ctx, &mut input),
+                Argument::Parser { may_satisfy, .. } => may_satisfy(&mut input),
             };
 
-            if input.is_empty() && satisfies {
-                for exec in &node.execs {
-                    match exec(ctx, command) {
-                        Ok(ok) => return Ok(ok),
-                        Err(err) => errors.push(err),
-                    }
+            if may_satisfy && input.is_empty() {
+                // at end of input - try executing
+                if let Some(exec) = node.exec {
+                    return DriveResult::Exec(exec);
                 }
-                continue;
             }
 
-            if satisfies {
+            if may_satisfy {
                 for child_key in &node.children {
-                    nodes.push((input, *child_key));
+                    state
+                        .nodes
+                        .push((state.command.len() - input.len(), *child_key));
                 }
             }
         }
-        Err(errors)
+
+        DriveResult::Finished
     }
 
     pub fn commands(&self) -> impl Iterator<Item = &CommandSpec<C>> {
@@ -167,7 +212,7 @@ where
 struct Node<C: Context> {
     children: SmallVec<[NodeKey; 4]>,
     argument: Argument<C>,
-    execs: Vec<Exec<C>>,
+    exec: Option<Exec<C>>,
 }
 
 impl<C: Context> From<Argument<C>> for Node<C> {
@@ -175,41 +220,7 @@ impl<C: Context> From<Argument<C>> for Node<C> {
         Node {
             children: Default::default(),
             argument,
-            execs: Vec::new(),
+            exec: None,
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    /*use super::*;
-    use bstr::B;
-    use smallvec::smallvec;
-
-    #[test]
-    fn parse_into_arguments() {
-        let test: Vec<(&[u8], SmallVec<[&[u8]; 4]>)> = vec![
-            (
-                B("test 20 \"this is a string: \\\"Hello world\\\"\""),
-                smallvec![B("test"), B("20"), B("this is a string: \"Hello world\"")],
-            ),
-            (
-                B("big inputs cost big programmers with big skills"),
-                smallvec![
-                    B("big"),
-                    B("inputs"),
-                    B("cost"),
-                    B("big"),
-                    B("programmers"),
-                    B("with"),
-                    B("big"),
-                    B("skills"),
-                ],
-            ),
-        ];
-
-        for (input, expected) in test {
-            assert_eq!(CommandDispatcher::parse_into_arguments(input), expected);
-        }
-    }*/
 }

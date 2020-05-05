@@ -1,4 +1,4 @@
-use crate::Context;
+use crate::{CommandResult, Context};
 
 /// The input type, acting like a stream of characters.
 #[derive(Copy, Clone, Debug)]
@@ -36,43 +36,44 @@ impl<'a> Input<'a> {
 /// * `satisfies`, returning whether the given input is
 /// a valid instance of this argument.
 pub trait ArgumentKind<C: Context>: Sized {
-    /// The error type returned by `Parse`.
-    ///
-    /// Must implement `Into<C::Error>`.
-    type ParseError: Into<C::Error>;
-
     /// Returns whether the given input may be valid
     /// instance of this argument. Should advance the
     /// pointer to `input` by the number of characters read.
-    fn may_satisfy<'a>(ctx: &C, input: &mut Input<'a>) -> bool;
+    fn may_satisfy(input: &mut Input) -> bool;
 
     /// Parses a value of this type from the given stream of characters.
     ///
     /// Should advance the pointer to `input` by the number of characters read.
-    fn parse<'a>(ctx: &C, input: &mut Input<'a>) -> Result<Self, Self::ParseError>;
+    fn parse<'a>(ctx: &C, input: &mut Input<'a>) -> CommandResult<C, Self>;
+
+    /// Returns the payload of this parser, specific to the context type.
+    ///
+    /// The return value can be used to serialize a command graph, for example.
+    fn payload() -> C::ArgumentPayload;
 }
 
-pub type MaySatisfyFn<C> = fn(&C, &mut Input) -> bool;
+pub type MaySatisfyFn = fn(&mut Input) -> bool;
 
 mod arguments {
     use super::*;
-    use std::num::*;
-    use std::path::PathBuf;
     use std::str::FromStr;
 
     macro_rules! from_str_argument {
-        ($($ty:ty,)* $(,)?) => {
+        ($($ty:ty: $id:ident),* $(,)?) => {
             $(
                 impl <C> ArgumentKind<C> for $ty where C: Context, C::Error: From<<$ty as FromStr>::Err> {
-                    type ParseError = <$ty as FromStr>::Err;
-
-                    fn may_satisfy<'a>(ctx: &C, input: &mut Input<'a>) -> bool {
-                        Self::parse(ctx, input).is_ok()
+                    fn may_satisfy<'a>(input: &mut Input<'a>) -> bool {
+                        let head = input.advance_until(" ");
+                        Self::from_str(head).is_ok()
                     }
 
-                    fn parse<'a>(_ctx: &C, input: &mut Input<'a>) -> Result<Self, Self::ParseError> {
+                    fn parse<'a>(_ctx: &C, input: &mut Input<'a>) -> CommandResult<C, Self> {
                         let head = input.advance_until(" ");
-                        Ok(Self::from_str(head)?)
+                        Ok(Self::from_str(head).map_err(|e| crate::CommandError::Error(e.into()))?)
+                    }
+
+                    fn payload() -> C::ArgumentPayload {
+                        <C::ArgumentPayload as crate::FromBrigadierId>::from_brigadier_id(crate::BrigadierId::$id)
                     }
                 }
             )*
@@ -80,33 +81,21 @@ mod arguments {
     }
 
     from_str_argument!(
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        isize,
-        u8,
-        u16,
-        u32,
-        u64,
-        usize,
-        f32,
-        f64,
-        u128,
-        String,
-        bool,
-        char,
-        NonZeroI8,
-        NonZeroI16,
-        NonZeroI32,
-        NonZeroI64,
-        NonZeroIsize,
-        NonZeroU8,
-        NonZeroU16,
-        NonZeroU32,
-        NonZeroU64,
-        NonZeroUsize,
-        PathBuf,
+        i8: Integer,
+        i16: Integer,
+        i32: Integer,
+        i64: Integer,
+        i128: Integer,
+        isize: Integer,
+        u8: Integer,
+        u16: Integer,
+        u32: Integer,
+        u64: Integer,
+        u128: Integer,
+        usize: Integer,
+        f32: Float32,
+        f64: Float64,
+        String: String,
+        bool: Bool,
     );
 }

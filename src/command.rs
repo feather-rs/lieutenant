@@ -1,5 +1,5 @@
 use crate::parser::MaySatisfyFn;
-use crate::Context;
+use crate::{CommandResult, Context};
 use derivative::Derivative;
 use smallvec::SmallVec;
 use std::any::TypeId;
@@ -18,7 +18,7 @@ pub trait Command<C: Context> {
 
 /// An argument to a command.
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""))]
+#[derivative(Clone(bound = "<C as Context>::ArgumentPayload: Clone"))]
 pub enum Argument<C: Context> {
     /// A literal, matching some fixed string value.
     ///
@@ -36,9 +36,11 @@ pub enum Argument<C: Context> {
         /// take precedence over command nodes with lower
         /// priorities.
         priority: usize,
-        /// The function used to check whether
-        /// a given input matches this parser.
-        satisfies: MaySatisfyFn<C>,
+        /// The heuristic used to check whether
+        /// a given input may satisfy this parser.
+        may_satisfy: MaySatisfyFn,
+        /// The payload of this parser.
+        payload: C::ArgumentPayload,
         /// Type ID of the argument type.
         argument_type: TypeId,
     },
@@ -88,7 +90,7 @@ impl<C: Context> Ord for Argument<C> {
     }
 }
 
-pub type Exec<C> = fn(&mut C, &str) -> Result<<C as Context>::Ok, <C as Context>::Error>;
+pub type Exec<C> = fn(&mut C, &str) -> CommandResult<C>;
 
 /// Specifies the arguments to a command,
 /// plus its metadata and executable function.
@@ -98,7 +100,7 @@ pub struct CommandSpec<C: Context> {
     pub arguments: Vec<Argument<C>>,
     /// Description of this command, potentially nonexistent.
     pub description: Option<Cow<'static, str>>,
-    /// THe function used to execute this command.
+    /// The function used to execute this command.
     pub exec: Exec<C>,
 }
 
