@@ -354,7 +354,7 @@ fn generate_command_spec(
                 quote! {
                     lieutenant::Argument::Parser {
                         name: #name.into(),
-                        satisfies: <#ty as lieutenant::ArgumentKind<#ctx_param>>::satisfies,
+                        satisfies: <#ty as lieutenant::ArgumentKind<#ctx_param>>::may_satisfy,
                         argument_type: std::any::TypeId::of::<#ty>(),
                         priority: #priority,
                     }

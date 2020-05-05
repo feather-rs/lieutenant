@@ -41,13 +41,10 @@ pub trait ArgumentKind<C: Context>: Sized {
     /// Must implement `Into<C::Error>`.
     type ParseError: Into<C::Error>;
 
-    /// Returns whether the given input is a valid
+    /// Returns whether the given input may be valid
     /// instance of this argument. Should advance the
     /// pointer to `input` by the number of characters read.
-    ///
-    /// This can be performed conveniently using the `ParserUtil`
-    /// trait.
-    fn satisfies<'a>(ctx: &C, input: &mut Input<'a>) -> bool;
+    fn may_satisfy<'a>(ctx: &C, input: &mut Input<'a>) -> bool;
 
     /// Parses a value of this type from the given stream of characters.
     ///
@@ -55,7 +52,7 @@ pub trait ArgumentKind<C: Context>: Sized {
     fn parse<'a>(ctx: &C, input: &mut Input<'a>) -> Result<Self, Self::ParseError>;
 }
 
-pub type SatisfiesFn<C> = fn(&C, &mut Input) -> bool;
+pub type MaySatisfyFn<C> = fn(&C, &mut Input) -> bool;
 
 mod arguments {
     use super::*;
@@ -69,7 +66,7 @@ mod arguments {
                 impl <C> ArgumentKind<C> for $ty where C: Context, C::Error: From<<$ty as FromStr>::Err> {
                     type ParseError = <$ty as FromStr>::Err;
 
-                    fn satisfies<'a>(ctx: &C, input: &mut Input<'a>) -> bool {
+                    fn may_satisfy<'a>(ctx: &C, input: &mut Input<'a>) -> bool {
                         Self::parse(ctx, input).is_ok()
                     }
 

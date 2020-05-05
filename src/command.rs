@@ -1,4 +1,4 @@
-use crate::parser::SatisfiesFn;
+use crate::parser::MaySatisfyFn;
 use crate::Context;
 use derivative::Derivative;
 use smallvec::SmallVec;
@@ -38,7 +38,7 @@ pub enum Argument<C: Context> {
         priority: usize,
         /// The function used to check whether
         /// a given input matches this parser.
-        satisfies: SatisfiesFn<C>,
+        satisfies: MaySatisfyFn<C>,
         /// Type ID of the argument type.
         argument_type: TypeId,
     },
