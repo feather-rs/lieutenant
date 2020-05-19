@@ -19,6 +19,12 @@ impl<'a> Input<'a> {
         head
     }
 
+    /// Advances until the end of input, returning all
+    /// consumed characters.
+    pub fn advance_to_end(&mut self) -> &'a str {
+        self.ptr
+    }
+
     /// Returns the number of remaining characters to read.
     pub fn len(&self) -> usize {
         self.ptr.len()
