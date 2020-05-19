@@ -1,9 +1,9 @@
-use super::{Input, Command, CommandBase, Func};
-use pin_project::pin_project;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use super::{Context, Command, CommandBase, Func, Input};
 use futures::{ready, TryFuture};
+use pin_project::pin_project;
 use std::future::Future;
+use std::pin::Pin;
+use std::task::{self, Poll};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Exec<T, F> {
@@ -11,17 +11,18 @@ pub struct Exec<T, F> {
     pub(super) callback: F,
 }
 
-impl<T, F> CommandBase for Exec<T, F>
+impl<T, F, C> CommandBase<C> for Exec<T, F>
 where
-    T: Command,
+    C: Context,
+    T: Command<C>,
     F: Func<T::Argument> + Clone + Send,
 {
     type Argument = (F::Output,);
-    type Future = ExecFuture<T, F>;
+    type Future = ExecFuture<T, F, C>;
 
-    fn parse(&self, input: *mut Input) -> Self::Future {
+    fn parse(&self, ctx: *mut C, input: *mut Input) -> Self::Future {
         ExecFuture {
-            command: self.command.parse(input),
+            command: self.command.parse(ctx, input),
             callback: self.callback.clone(),
         }
     }
@@ -29,21 +30,22 @@ where
 
 #[allow(missing_debug_implementations)]
 #[pin_project]
-pub struct ExecFuture<T: Command, F> {
+pub struct ExecFuture<T: Command<C>, F, C: Context> {
     #[pin]
     command: T::Future,
     callback: F,
 }
 
-impl<T, F> Future for ExecFuture<T, F>
+impl<T, F, C> Future for ExecFuture<T, F, C>
 where
-    T: Command,
+    C: Context,
+    T: Command<C>,
     F: Func<T::Argument>,
 {
     type Output = Result<(F::Output,), ()>;
 
     #[inline]
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
         let pin = self.project();
         match ready!(pin.command.try_poll(cx)) {
             Ok(ex) => {

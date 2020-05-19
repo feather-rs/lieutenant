@@ -1,9 +1,7 @@
-
 #[derive(Debug, Clone, Copy)]
 pub struct Input<'a> {
-    ptr: &'a str
+    ptr: &'a str,
 }
-
 
 impl<'a> Input<'a> {
     pub fn new(ptr: &'a str) -> Self {

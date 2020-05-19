@@ -1,10 +1,10 @@
-use super::{Input, Command, CommandBase, Combine, Tuple, HList};
-use pin_project::{pin_project, project};
-use std::pin::Pin;
-use std::future::Future;
-use std::task::{self, Poll};
+use super::{Context, Combine, Command, CommandBase, HList, Input, Tuple};
 use futures::ready;
+use pin_project::{pin_project, project};
+use std::future::Future;
 use std::mem;
+use std::pin::Pin;
+use std::task::{self, Poll};
 
 #[derive(Debug, Copy, Clone)]
 pub struct And<T, U> {
@@ -12,44 +12,47 @@ pub struct And<T, U> {
     pub(super) second: U,
 }
 
-impl<T, U> CommandBase for And<T, U>
+impl<T, U, C: Context> CommandBase<C> for And<T, U>
 where
-    T: Command,
+    T: Command<C>,
     T::Argument: Send,
-    U: Command + Clone + Send,
+    U: Command<C> + Clone + Send,
     <T::Argument as Tuple>::HList: Combine<<U::Argument as Tuple>::HList> + Send,
 {
     type Argument = <<<T::Argument as Tuple>::HList as Combine<<U::Argument as Tuple>::HList>>::Output as HList>::Tuple;
-    type Future = AndFuture<T, U>;
+    type Future = AndFuture<T, U, C>;
 
-    fn parse(&self, input: *mut Input) -> Self::Future {
-        let (input,) = unsafe { (&mut *input,) };
+    fn parse(&self, ctx: *mut C, input: *mut Input) -> Self::Future {
+        let (ctx, input,) = unsafe { (&mut *ctx, &mut *input,) };
         AndFuture {
-            state: State::First(self.first.parse(input), self.second.clone()),
+            state: State::First(self.first.parse(ctx, input), self.second.clone()),
             input: unsafe { mem::transmute::<*mut Input<'_>, *mut Input<'static>>(input) },
+            context: ctx,
         }
-    }   
+    }
 }
 
 #[allow(missing_debug_implementations)]
 #[pin_project]
-pub struct AndFuture<T: Command, U: Command> {
+pub struct AndFuture<T: Command<C>, U: Command<C>, C: Context> {
     #[pin]
-    state: State<T, U>,
+    state: State<T, U, C>,
     input: *mut Input<'static>,
+    context: *mut C,
 }
 
 #[pin_project]
-enum State<T: Command, U: Command> {
+enum State<T: Command<C>, U: Command<C>, C: Context> {
     First(#[pin] T::Future, U),
     Second(Option<T::Argument>, #[pin] U::Future),
     Done,
 }
 
-impl<T, U> Future for AndFuture<T, U>
+impl<T, U, C> Future for AndFuture<T, U, C>
 where
-    T: Command,
-    U: Command,
+    C: Context,
+    T: Command<C>,
+    U: Command<C>,
     <T::Argument as Tuple>::HList: Combine<<U::Argument as Tuple>::HList> + Send,
 {
     type Output = Result<
@@ -58,13 +61,13 @@ where
 
     #[project]
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
-        let (input,) = unsafe { (&mut *self.input,) };
+        let (ctx, input) = unsafe { (&mut *self.context, &mut *self.input,) };
         loop {
             let pin = self.as_mut().project();
             #[project]
             let (ex1, fut2) = match pin.state.project() {
                 State::First(first, second) => match ready!(first.poll(cx)) {
-                    Ok(first) => (first, second.parse(input)),
+                    Ok(first) => (first, second.parse(ctx, input)),
                     Err(err) => return Poll::Ready(Err(From::from(err))),
                 },
                 State::Second(ex1, second) => {
@@ -73,7 +76,11 @@ where
                         Err(err) => return Poll::Ready(Err(From::from(err))),
                     };
                     let ex3 = ex1.take().unwrap().hlist().combine(ex2.hlist()).flatten();
-                    self.set(AndFuture { state: State::Done, input });
+                    self.set(AndFuture {
+                        state: State::Done,
+                        input,
+                        context: ctx,
+                    });
                     return Poll::Ready(Ok(ex3));
                 }
                 State::Done => panic!("polled after complete"),
@@ -81,7 +88,8 @@ where
 
             self.set(AndFuture {
                 state: State::Second(Some(ex1), fut2),
-                input: input,
+                input,
+                context: ctx,
             });
         }
     }
