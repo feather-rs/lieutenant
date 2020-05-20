@@ -1,12 +1,21 @@
 mod and;
 mod exec;
 mod or;
+mod untuple_one;
 
 pub(crate) use self::and::And;
 pub(crate) use self::exec::Exec;
 pub(crate) use self::or::Or;
+pub(crate) use self::untuple_one::UntupleOne;
 use crate::generic::{Combine, Func, HList, Tuple};
 pub use crate::{Context, Input};
+use thiserror::Error;
+
+#[derive(Debug, Error, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CommandError {
+    #[error("could not find the given command")]
+    NotFound,
+}
 
 pub trait CommandBase {
     type Argument: Tuple;
@@ -16,7 +25,7 @@ pub trait CommandBase {
         &self,
         ctx: &mut Self::Context,
         input: &mut Input<'i>,
-    ) -> Result<Self::Argument, ()>;
+    ) -> Result<Self::Argument, <Self::Context as Context>::Error>;
 }
 
 pub trait Command: CommandBase {
@@ -53,6 +62,14 @@ pub trait Command: CommandBase {
             callback: func,
         }
     }
+
+    fn untuple_one<T>(self) -> UntupleOne<Self>
+    where
+        Self: Command<Argument = (T,)> + Sized,
+        T: Tuple,
+    {
+        UntupleOne { command: self }
+    }
 }
 
 impl<T> Command for T where T: CommandBase {}
@@ -69,17 +86,20 @@ impl<C: Context> AsRef<str> for Literal<C> {
     }
 }
 
-impl<C: Context> CommandBase for Literal<C> {
+impl<C> CommandBase for Literal<C>
+where
+    C: Context,
+{
     type Argument = ();
     type Context = C;
 
-    fn call<'i>(&self, _ctx: &mut C, input: &mut Input<'i>) -> Result<Self::Argument, ()> {
+    fn call<'i>(&self, _ctx: &mut C, input: &mut Input<'i>) -> Result<Self::Argument, <Self::Context as Context>::Error> {
         let head = input.advance_until(" ").to_lowercase();
         let value = self.as_ref().to_lowercase();
         if value == head {
             Ok(())
         } else {
-            Err(())
+            Err(CommandError::NotFound.into())
         }
     }
 }
@@ -98,7 +118,7 @@ impl<C: Context> CommandBase for Any<C> {
     type Argument = ();
     type Context = C;
 
-    fn call<'i>(&self, _ctx: &mut C, _input: &mut Input<'i>) -> Result<Self::Argument, ()> {
+    fn call<'i>(&self, _ctx: &mut C, _input: &mut Input<'i>) -> Result<Self::Argument, <Self::Context as Context>::Error> {
         Ok(())
     }
 }
@@ -117,7 +137,7 @@ impl<C: Context, T> CommandBase for Provider<C, T> {
     type Argument = (*mut T,);
     type Context = C;
 
-    fn call<'i>(&self, ctx: &mut C, _input: &mut Input<'i>) -> Result<Self::Argument, ()> {
+    fn call<'i>(&self, ctx: &mut C, _input: &mut Input<'i>) -> Result<Self::Argument, <Self::Context as Context>::Error> {
         let provider = self.provider;
         Ok((provider(ctx),))
     }
@@ -135,16 +155,10 @@ mod tests {
     use super::*;
     use thiserror::Error;
 
-    #[derive(Debug, Error)]
-    enum MyError {
-        #[error("a")]
-        A,
-    }
-
     #[derive(Clone)]
     struct State;
     impl Context for State {
-        type Error = MyError;
+        type Error = CommandError;
         type Ok = ();
     }
 
@@ -153,14 +167,14 @@ mod tests {
         let command = literal("hello").and(literal("world")).exec(|| {
             println!("hello world");
             Ok(())
-        });
+        }).untuple_one();
 
         let res = command.call(&mut State, &mut "hello world".into());
 
         assert_eq!(res, Ok(()));
 
         let res = command.call(&mut State, &mut "foo".into());
-        assert_eq!(res, Err(()))
+        assert_eq!(res, Err(CommandError::NotFound))
     }
 
     #[test]
@@ -176,13 +190,13 @@ mod tests {
             }));
 
         let res = command.call(&mut State, &mut "hello".into());
-        assert_eq!(res, Ok(()));
+        assert!(res.is_ok());
 
         let res = command.call(&mut State, &mut "world".into());
-        assert_eq!(res, Ok(()));
+        assert!(res.is_ok());
 
         let res = command.call(&mut State, &mut "foo".into());
-        assert_eq!(res, Err(()))
+        assert!(res.is_err());
     }
 
     #[test]
@@ -190,6 +204,6 @@ mod tests {
         let command = literal("hello").exec(|| Ok(()));
 
         let res = command.call(&mut State, &mut "hello".into());
-        assert_eq!(res, Ok(()));
+        assert!(res.is_ok());
     }
 }

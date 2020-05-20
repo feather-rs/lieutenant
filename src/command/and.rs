@@ -1,4 +1,4 @@
-use super::{Combine, Command, CommandBase, HList, Input, Tuple};
+use super::{Context, Combine, Command, CommandBase, HList, Input, Tuple};
 
 #[derive(Debug, Copy, Clone)]
 pub struct And<T, U> {
@@ -19,7 +19,7 @@ where
         &self,
         ctx: &mut Self::Context,
         input: &mut Input<'i>,
-    ) -> Result<Self::Argument, ()> {
+    ) -> Result<Self::Argument, <Self::Context as Context>::Error> {
         Ok(self
             .first
             .call(ctx, input)?

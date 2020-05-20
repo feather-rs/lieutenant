@@ -1,4 +1,4 @@
-use super::{Command, CommandBase, Input};
+use super::{Context, Command, CommandBase, Input};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Or<T, U> {
@@ -18,7 +18,7 @@ where
         &self,
         ctx: &mut Self::Context,
         input: &mut Input<'i>,
-    ) -> Result<Self::Argument, ()> {
+    ) -> Result<Self::Argument, <Self::Context as Context>::Error> {
         match self.first.call(ctx, &mut input.clone()) {
             ok @ Ok(_) => ok,
             _ => self.second.call(ctx, input),
