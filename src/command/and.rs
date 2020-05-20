@@ -9,13 +9,22 @@ pub struct And<T, U> {
 impl<T, U> CommandBase for And<T, U>
 where
     T: Command,
-    T::Argument: Send,
-    U: Command + Clone + Send,
+    U: Command<Context = T::Context>,
     <T::Argument as Tuple>::HList: Combine<<U::Argument as Tuple>::HList> + Send,
 {
     type Argument = <<<T::Argument as Tuple>::HList as Combine<<U::Argument as Tuple>::HList>>::Output as HList>::Tuple;
+    type Context = T::Context;
 
-    fn call<'i>(&self, input: &mut Input<'i>) -> Result<Self::Argument, ()> {
-        Ok(self.first.call(input)?.hlist().combine(self.second.call(input)?.hlist()).flatten())
+    fn call<'i>(
+        &self,
+        ctx: &mut Self::Context,
+        input: &mut Input<'i>,
+    ) -> Result<Self::Argument, ()> {
+        Ok(self
+            .first
+            .call(ctx, input)?
+            .hlist()
+            .combine(self.second.call(ctx, input)?.hlist())
+            .flatten())
     }
 }

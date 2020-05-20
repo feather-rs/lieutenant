@@ -7,4 +7,5 @@ use std::error::Error;
 
 pub trait Context: Clone {
     type Error: Error;
+    type Ok;
 }

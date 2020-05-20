@@ -35,8 +35,6 @@ impl<'a> Input<'a> {
 
 impl<'i> From<&'i str> for Input<'i> {
     fn from(val: &'i str) -> Self {
-        Input {
-            ptr: val,
-        }
+        Input { ptr: val }
     }
 }
