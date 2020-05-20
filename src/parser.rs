@@ -32,3 +32,11 @@ impl<'a> Input<'a> {
         self.len() == 0
     }
 }
+
+impl<'i> From<&'i str> for Input<'i> {
+    fn from(val: &'i str) -> Self {
+        Input {
+            ptr: val,
+        }
+    }
+}

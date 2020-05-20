@@ -7,22 +7,19 @@ pub(crate) use self::exec::Exec;
 pub(crate) use self::or::Or;
 use crate::generic::{Combine, Func, HList, Tuple};
 pub use crate::{Context, Input};
-use futures::future;
-use std::future::Future;
 
-pub trait CommandBase<C: Context> {
+pub trait CommandBase {
     type Argument: Tuple;
-    type Future: Future<Output = Result<Self::Argument, ()>>;
 
-    fn parse(&self, ctx: *mut C, input: *mut Input) -> Self::Future;
+    fn call<'i>(&self, input: &mut Input<'i>) -> Result<Self::Argument, ()>;
 }
 
-pub trait Command<C: Context>: CommandBase<C> {
+pub trait Command: CommandBase {
     fn and<F>(self, other: F) -> And<Self, F>
     where
         Self: Sized,
         <Self::Argument as Tuple>::HList: Combine<<F::Argument as Tuple>::HList>,
-        F: Command<C> + Clone,
+        F: Command + Clone,
     {
         And {
             first: self,
@@ -33,7 +30,7 @@ pub trait Command<C: Context>: CommandBase<C> {
     fn or<F>(self, other: F) -> Or<Self, F>
     where
         Self: Sized,
-        F: Command<C>,
+        F: Command,
     {
         Or {
             first: self,
@@ -53,93 +50,87 @@ pub trait Command<C: Context>: CommandBase<C> {
     }
 }
 
-impl<T, C: Context> Command<C> for T where T: CommandBase<C> {}
+impl<T> Command for T where T: CommandBase {}
 
 #[derive(Debug, Clone)]
-pub struct Literal<L>(L);
+pub struct Literal {
+    value: &'static str,
+}
 
-impl<L, C> CommandBase<C> for Literal<L>
-where
-    C: Context,
-    L: AsRef<str>,
-{
+impl AsRef<str> for Literal {
+    fn as_ref(&self) -> &str {
+        self.value
+    }
+}
+
+impl CommandBase for Literal {
     type Argument = ();
-    type Future = future::Ready<Result<Self::Argument, ()>>;
 
-    fn parse(&self, _ctx: *mut C, input: *mut Input) -> Self::Future {
-        let input = unsafe { &mut *input };
-        if self.0.as_ref() == input.advance_until(" ") {
-            future::ready(Ok(()))
+    fn call<'i>(&self, input: &mut Input<'i>) -> Result<Self::Argument, ()> {
+        let head = input.advance_until(" ").to_lowercase();
+        let value = self.as_ref().to_lowercase();
+        if value == head {
+            Ok(())
         } else {
-            future::ready(Err(()))
+            Err(())
         }
     }
 }
 
-pub fn literal<L: AsRef<str>>(lit: L) -> Literal<L> {
-    Literal(lit)
+pub fn literal(lit: &'static str) -> Literal {
+    Literal { value: lit }
+}
+
+#[derive(Debug, Clone)]
+pub struct Any;
+
+impl CommandBase for Any {
+    type Argument = ();
+
+    fn call<'i>(&self, _input: &mut Input<'i>) -> Result<Self::Argument, ()> {
+        Ok(())
+    }
+}
+
+pub fn any() -> Any {
+    Any
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thiserror::Error;
-
-    #[derive(Error, Debug)]
-    enum MyError {
-        #[error("some error")]
-        Err
-    }
-
-    struct State;
-    impl Context for State {
-        type Error = MyError;
-    }
-
+    
     #[test]
-    fn simple_command() {
-        let command = literal("hello")
-            .and(literal("world"));
-        let mut input = Input::new("hello world");
-        smol::run(async {
-            let result = command.parse(&mut State, &mut input).await;
-            assert_eq!(result, Ok(()))
+    fn and_command() {
+        let command = literal("hello").and(literal("world")).exec(|| {
+            println!("hello world");
+            Ok(())
         });
 
-        let mut input = Input::new("hello");
-        smol::run(async {
-            let result = command.parse(&mut State, &mut input).await;
-            assert_eq!(result, Err(()));
-        });
+        let res = command.call(&mut "hello world".into());
+        assert_eq!(res, Ok(()));
+
+        let res = command.call(&mut "foo".into());
+        assert_eq!(res, Err(()))
     }
 
     #[test]
-    fn multiple_commands() {
-        // let root = literal::<State>("hello")
-        //     .exec(|| println!("hello"))
-        //     .or(literal("world").exec(|| println!("world")));
+    fn or_command() {
+        let command = literal("hello").exec(|| {
+            println!("hello");
+            Ok(())
+        }).or(literal("world").exec(|| {
+            println!("world");
+            Ok(())
+        }));
 
-        // let mut input = Input::new("hello");
-        // smol::run(async {
-        //     let result = root.parse(&mut State, &mut input).await;
-        // });
+        let res = command.call(&mut "hello".into());
+        assert_eq!(res, Ok(()));
 
-        // let mut input = Input::new("world");
-        // smol::run(async {
-        //     let result = root.parse(&mut State, &mut input).await;
-        // });
+        let res = command.call(&mut "world".into());
+        assert_eq!(res, Ok(()));
 
-        // let mut input = Input::new("foo");
-        // smol::run(async {
-        //     let result = root.parse(&mut State, &mut input).await;
-        // });
-    }
-
-    #[test]
-    fn multiple_exec() {
-        // let command = literal("hello")
-        //     .exec(|| 32i64)
-        //     .exec(|n| (n, n + 2))
-        //     .exec(|(a, b)| println!("{} {}", a, b));
+        let res = command.call(&mut "foo".into());
+        assert_eq!(res, Err(()))
     }
 }

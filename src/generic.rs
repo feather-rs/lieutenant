@@ -8,12 +8,6 @@ pub(crate) fn one<T>(val: T) -> One<T> {
     (val,)
 }
 
-#[derive(Debug)]
-pub enum Either<T, U> {
-    A(T),
-    B(U),
-}
-
 pub trait HList: Sized {
     type Tuple: Tuple<HList = Self>;
 

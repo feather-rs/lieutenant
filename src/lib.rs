@@ -5,6 +5,6 @@ pub use parser::Input;
 
 use std::error::Error;
 
-pub trait Context {
+pub trait Context: Clone {
     type Error: Error;
 }
