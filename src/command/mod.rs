@@ -56,7 +56,8 @@ pub trait Command: CommandBase {
     where
         Self: Sized,
         F: Func<
-                <<<(&'a mut Self::Context,) as Tuple>::HList as Combine<<Self::Argument as Tuple>::HList>>::Output as HList>::Tuple
+                <<<(&'a mut Self::Context,) as Tuple>::HList as Combine<<Self::Argument as Tuple>::HList>>::Output as HList>::Tuple,
+                Output = Result<<Self::Context as Context>::Ok, <Self::Context as Context>::Error>
             > + Clone,
         <(&'a mut Self::Context,) as Tuple>::HList: Combine<<Self::Argument as Tuple>::HList>,
         (&'a mut Self::Context,): Tuple,
