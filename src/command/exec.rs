@@ -1,17 +1,20 @@
-use super::{CommandError, Command, CommandBase, Context, Func, Input};
+use super::{CommandError, Tuple, Combine, HList, Command, CommandBase, Context, Func, Input};
 #[derive(Copy, Clone, Debug)]
-pub struct Exec<T, F> {
+pub struct Exec<'a, T, F> {
     pub(super) command: T,
     pub(super) callback: F,
+    pub(super) marker: std::marker::PhantomData<&'a ()>
 }
 
-impl<T, F> CommandBase for Exec<T, F>
+impl<'a, T, F> CommandBase for Exec<'a, T, F>
 where
     T: Command,
     F: Func<
-        T::Argument,
-        Output = Result<<T::Context as Context>::Ok, <T::Context as Context>::Error>,
-    >,
+        <<<(&'a mut Self::Context,) as Tuple>::HList as Combine<<Self::Argument as Tuple>::HList>>::Output as HList>::Tuple
+    > + Clone,
+    <(&'a mut Self::Context,) as Tuple>::HList: Combine<<Self::Argument as Tuple>::HList>,
+    (&'a mut Self::Context,): Tuple,
+    Self::Context: 'a,
 {
     type Argument = <Self::Context as Context>::Ok;
     type Context = T::Context;

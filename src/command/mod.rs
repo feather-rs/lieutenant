@@ -52,10 +52,15 @@ pub trait Command: CommandBase {
         }
     }
 
-    fn exec<F>(self, func: F) -> Exec<Self, F>
+    fn exec<'a, F>(self, func: F) -> Exec<'a, Self, F>
     where
         Self: Sized,
-        F: Func<Self::Argument> + Clone,
+        F: Func<
+                <<<(&'a mut Self::Context,) as Tuple>::HList as Combine<<Self::Argument as Tuple>::HList>>::Output as HList>::Tuple
+            > + Clone,
+        <(&'a mut Self::Context,) as Tuple>::HList: Combine<<Self::Argument as Tuple>::HList>,
+        (&'a mut Self::Context,): Tuple,
+        Self::Context: 'a,
     {
         Exec {
             command: self,
@@ -128,26 +133,26 @@ pub fn any<C: Context>() -> Any<C> {
 }
 
 #[derive(Clone)]
-pub struct Provider<C, T> {
-    provider: fn(&mut C) -> T,
+pub struct Guard<C, T> {
+    guard: fn(&mut C) -> T,
 }
 
-impl<C, T> CommandBase for Provider<C, T>
+impl<C> CommandBase for Guard<C, Result<(), C::Error>>
 where
     C: Context,
 {
-    type Argument = (T,);
+    type Argument = ();
     type Context = C;
 
     fn call<'i>(&self, ctx: &mut C, _input: &mut Input<'i>) -> Result<Self::Argument, <Self::Context as Context>::Error> {
-        let provider = self.provider;
-        Ok((provider(ctx),))
+        let provider = self.guard;
+        provider(ctx)
     }
 }
 
-pub fn provider<C, T>(provider: fn(&mut C) -> T) -> Provider<C, T> {
-    Provider {
-        provider,
+pub fn guard<C, T>(guard: fn(&mut C) -> T) -> Guard<C, T> {
+    Guard {
+        guard,
     }
 }
 
@@ -165,7 +170,7 @@ mod tests {
 
     #[test]
     fn and_command() {
-        let command = literal("hello").and(literal("world")).exec(|| {
+        let command = literal("hello").and(literal("world")).exec(|_| {
             println!("hello world");
             Ok(())
         });
@@ -181,11 +186,11 @@ mod tests {
     #[test]
     fn or_command() {
         let command = literal("hello")
-            .exec(|| {
+            .exec(|_| {
                 println!("hello");
                 Ok(())
             })
-            .or(literal("world").exec(|| {
+            .or(literal("world").exec(|_| {
                 println!("world");
                 Ok(())
             }));
@@ -201,8 +206,8 @@ mod tests {
     }
 
     #[test]
-    fn provider_command() {
-        let command = provider(|ctx: &mut State| ctx.clone()).and(literal("hello")).exec(|_| Ok(()));
+    fn guard_command() {
+        let command = guard(|_: &mut State| Ok(())).and(literal("hello")).exec(|_| Ok(()));
 
         let res = command.call(&mut State, &mut "hello".into());
         assert!(res.is_ok());
