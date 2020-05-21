@@ -7,5 +7,5 @@ use std::error::Error;
 
 pub trait Context: Clone {
     type Error: Error + From<command::CommandError>;
-    type Ok;
+    type Ok: generic::Tuple;
 }

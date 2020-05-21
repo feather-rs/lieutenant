@@ -129,12 +129,14 @@ pub fn any<C: Context>() -> Any<C> {
 
 #[derive(Clone)]
 pub struct Provider<C, T> {
-    provider: fn(&mut C) -> &mut T,
-    context: std::marker::PhantomData<C>,
+    provider: fn(&mut C) -> T,
 }
 
-impl<C: Context, T> CommandBase for Provider<C, T> {
-    type Argument = (*mut T,);
+impl<C, T> CommandBase for Provider<C, T>
+where
+    C: Context,
+{
+    type Argument = (T,);
     type Context = C;
 
     fn call<'i>(&self, ctx: &mut C, _input: &mut Input<'i>) -> Result<Self::Argument, <Self::Context as Context>::Error> {
@@ -143,10 +145,9 @@ impl<C: Context, T> CommandBase for Provider<C, T> {
     }
 }
 
-pub fn provider<C, T>(provider: fn(&mut C) -> &mut T) -> Provider<C, T> {
+pub fn provider<C, T>(provider: fn(&mut C) -> T) -> Provider<C, T> {
     Provider {
         provider,
-        context: Default::default(),
     }
 }
 
@@ -167,7 +168,7 @@ mod tests {
         let command = literal("hello").and(literal("world")).exec(|| {
             println!("hello world");
             Ok(())
-        }).untuple_one();
+        });
 
         let res = command.call(&mut State, &mut "hello world".into());
 
@@ -201,7 +202,7 @@ mod tests {
 
     #[test]
     fn provider_command() {
-        let command = literal("hello").exec(|| Ok(()));
+        let command = provider(|ctx: &mut State| ctx.clone()).and(literal("hello")).exec(|_| Ok(()));
 
         let res = command.call(&mut State, &mut "hello".into());
         assert!(res.is_ok());
