@@ -50,9 +50,10 @@ pub trait Parser: ParserBase {
         }
     }
 
-    fn exec<'a, C>(self, command: fn(&'a mut C, &'a Self::Extract) -> ()) -> Exec<'a, Self, C>
+    fn exec<'a, C>(self, command: fn(&'a mut C, Self::Extract) -> ()) -> Exec<'a, Self, C>
     where
         Self: Sized,
+        Self::Extract: 'static,
     {
         Exec {
             parser: self,
@@ -116,7 +117,7 @@ mod tests {
             });
 
             let res = command.parse( &mut "hello world".into());
-            if let Some((ref command,)) = res {
+            if let Some((command,)) = res {
                 command.call(&mut n);
             }
         }
