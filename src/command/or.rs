@@ -1,4 +1,4 @@
-use super::{Context, Command, CommandBase, Input};
+use super::{Parser, ParserBase, Input};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Or<T, U> {
@@ -6,22 +6,20 @@ pub struct Or<T, U> {
     pub(super) second: U,
 }
 
-impl<T, U> CommandBase for Or<T, U>
+impl<T, U> ParserBase for Or<T, U>
 where
-    T: Command,
-    U: Command<Context = T::Context, Argument = T::Argument>,
+    T: Parser,
+    U: Parser<Extract = T::Extract>,
 {
-    type Argument = T::Argument;
-    type Context = T::Context;
+    type Extract = T::Extract;
 
-    fn call<'i>(
+    fn parse<'i>(
         &self,
-        ctx: &mut Self::Context,
         input: &mut Input<'i>,
-    ) -> Result<Self::Argument, <Self::Context as Context>::Error> {
-        match self.first.call(ctx, &mut input.clone()) {
-            ok @ Ok(_) => ok,
-            _ => self.second.call(ctx, input),
+    ) -> Option<Self::Extract> {
+        match self.first.parse(&mut input.clone()) {
+            ok @ Some(_) => ok,
+            _ => self.second.parse(input),
         }
     }
 }

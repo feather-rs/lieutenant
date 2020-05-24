@@ -1,23 +1,22 @@
-use super::{Input, Tuple, Command, CommandBase, Context};
+use super::{Input, Tuple, Parser, ParserBase};
 
 #[derive(Clone, Copy, Debug)]
-pub struct UntupleOne<F> {
-    pub(super) command: F,
+pub struct UntupleOne<P> {
+    pub(super) parser: P,
 }
 
-impl<F, T> CommandBase for UntupleOne<F>
+impl<P, T> ParserBase for UntupleOne<P>
 where
-    F: Command<Argument = (T,)>,
+    P: Parser<Extract = (T,)>,
     T: Tuple,
 {
-    type Argument = T;
-    type Context = F::Context;
+    type Extract = T;
 
     #[inline]
-    fn call<'i>(&self, ctx: &mut Self::Context, input: &mut Input<'i>) -> Result<Self::Argument, <Self::Context as Context>::Error> {
-        match self.command.call(ctx, input) {
-            Ok((arg,)) => Ok(arg),
-            Err(err) => Err(err),
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+        match self.parser.parse(input) {
+            Some((arg,)) => Some(arg),
+            None => None,
         }
     }
 }

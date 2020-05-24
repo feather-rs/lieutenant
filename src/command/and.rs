@@ -1,4 +1,4 @@
-use super::{Context, Combine, Command, CommandBase, HList, Input, Tuple};
+use super::{Combine, Parser, ParserBase, HList, Input, Tuple};
 
 #[derive(Debug, Copy, Clone)]
 pub struct And<T, U> {
@@ -6,25 +6,20 @@ pub struct And<T, U> {
     pub(super) second: U,
 }
 
-impl<T, U> CommandBase for And<T, U>
+impl<T, U> ParserBase for And<T, U>
 where
-    T: Command,
-    U: Command<Context = T::Context>,
-    <T::Argument as Tuple>::HList: Combine<<U::Argument as Tuple>::HList> + Send,
+    T: Parser,
+    U: Parser,
+    <T::Extract as Tuple>::HList: Combine<<U::Extract as Tuple>::HList> + Send,
 {
-    type Argument = <<<T::Argument as Tuple>::HList as Combine<<U::Argument as Tuple>::HList>>::Output as HList>::Tuple;
-    type Context = T::Context;
+    type Extract = <<<T::Extract as Tuple>::HList as Combine<<U::Extract as Tuple>::HList>>::Output as HList>::Tuple;
 
-    fn call<'i>(
+    fn parse<'i>(
         &self,
-        ctx: &mut Self::Context,
         input: &mut Input<'i>,
-    ) -> Result<Self::Argument, <Self::Context as Context>::Error> {
-        Ok(self
-            .first
-            .call(ctx, input)?
-            .hlist()
-            .combine(self.second.call(ctx, input)?.hlist())
-            .flatten())
+    ) -> Option<Self::Extract> {
+        let first = self.first.parse(input)?.hlist();
+        let second = self.second.parse(input)?.hlist();
+        Some(first.combine(second).flatten())
     }
 }

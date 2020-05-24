@@ -1,33 +1,41 @@
-use super::{CommandError, Tuple, Combine, HList, Command, CommandBase, Context, Func, Input};
-#[derive(Copy, Clone, Debug)]
-pub struct Exec<'a, T, F> {
-    pub(super) command: T,
-    pub(super) callback: F,
-    pub(super) marker: std::marker::PhantomData<&'a ()>
+use super::{Input, Parser, ParserBase};
+
+#[derive(Clone)]
+pub struct Exec<'a, P: Parser, C> {
+    pub(super) parser: P,
+    pub(super) command: fn(&'a mut C, &'a P::Extract) -> ()
 }
 
-impl<'a, T, F> CommandBase for Exec<'a, T, F>
+impl<'a, P, C> ParserBase for Exec<'a, P, C>
 where
-    T: Command,
-    F: Func<
-        <<<(&'a mut T::Context,) as Tuple>::HList as Combine<<Self::Argument as Tuple>::HList>>::Output as HList>::Tuple
-    > + Clone,
-    <(&'a mut T::Context,) as Tuple>::HList: Combine<<Self::Argument as Tuple>::HList>,
-    (&'a mut T::Context,): Tuple,
-    Self::Context: 'a,
+    P: Parser,
+    C: 'a,
+    P::Extract: 'a,
 {
-    type Argument = <Self::Context as Context>::Ok;
-    type Context = T::Context;
+    type Extract = (Command<'a, P::Extract, C>,);
 
-    fn call<'i>(
-        &self,
-        ctx: &mut Self::Context,
-        input: &mut Input<'i>,
-    ) -> Result<Self::Argument, <T::Context as Context>::Error> {
-        match (self.command.call(ctx, input), input.is_empty()) {
-            (Ok(ex), true) => self.callback.call(ex),
-            (Err(err), _) => Err(err),
-            _ => Err(CommandError::NotFound.into()),
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+        let ex = self.parser.parse(input)?;
+        if input.is_empty() {
+            Some((Command {
+                extracted: ex,
+                command: self.command,
+            },))
+        } else {
+            None
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Command<'a, E, C> {
+    pub(super) extracted: E,
+    pub(super) command: fn(&'a mut C, &'a E) -> ()
+}
+
+impl<'a, E, C> Command<'a, E, C> {
+    pub fn call(&'a self, ctx: &'a mut C) -> () {
+        let command = self.command;
+        command(ctx, &self.extracted)
     }
 }
