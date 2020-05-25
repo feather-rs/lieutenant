@@ -1,12 +1,12 @@
 mod and;
+mod exec;
 mod or;
 mod untuple_one;
-mod exec;
 
 pub(crate) use self::and::And;
+pub(crate) use self::exec::{Command, Exec};
 pub(crate) use self::or::Or;
 pub(crate) use self::untuple_one::UntupleOne;
-pub(crate) use self::exec::Exec;
 use crate::generic::{Combine, Func, HList, Tuple};
 pub use crate::{Context, Input};
 use thiserror::Error;
@@ -20,10 +20,7 @@ pub enum CommandError {
 pub trait ParserBase {
     type Extract: Tuple;
 
-    fn parse<'i>(
-        &self,
-        input: &mut Input<'i>,
-    ) -> Option<Self::Extract>;
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract>;
 }
 
 pub trait Parser: ParserBase {
@@ -50,7 +47,7 @@ pub trait Parser: ParserBase {
         }
     }
 
-    fn exec<'a, C>(self, command: fn(&'a mut C, Self::Extract) -> ()) -> Exec<'a, Self, C>
+    fn exec<C>(self, command: for<'a> fn(&'a mut C, &'a Self::Extract) -> ()) -> Exec<Self, C>
     where
         Self: Sized,
         Self::Extract: 'static,
@@ -98,9 +95,7 @@ impl ParserBase for Literal {
 }
 
 pub fn literal(lit: &'static str) -> Literal {
-    Literal {
-        value: lit,
-    }
+    Literal { value: lit }
 }
 
 #[cfg(test)]
@@ -109,23 +104,27 @@ mod tests {
 
     #[test]
     fn and_command() {
+        let root = literal("hello")
+            .and(literal("world"))
+            .exec(|n, ()| *n = 42)
+            .or(literal("foo").exec(|n, ()| *n += 42));
+
         let mut n = 45;
 
-        {
-            let command = literal("hello").and(literal("world")).exec(|n: &mut i32, ()| {
-                *n = 42;
-            });
-
-            let res = command.parse( &mut "hello world".into());
-            if let Some((command,)) = res {
-                command.call(&mut n);
-            }
+        if let Some((command,)) = root.parse(&mut "hello world".into()) {
+            command.call(&mut n);
         }
 
         assert_eq!(n, 42);
 
-        // let res = command.parse(&mut "foo".into());
-        // assert_eq!(res, None)
+        if let Some((command,)) = root.parse(&mut "foo".into()) {
+            command.call(&mut n);
+        }
+
+        assert_eq!(n, 84);
+
+        let command = root.parse(&mut "bar".into());
+        assert!(command.is_none());
     }
 
     #[test]
