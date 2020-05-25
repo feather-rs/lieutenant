@@ -7,7 +7,7 @@ pub(crate) use self::and::And;
 pub(crate) use self::exec::{Command, Exec};
 pub(crate) use self::or::Or;
 pub(crate) use self::untuple_one::UntupleOne;
-use crate::generic::{Combine, Either, HList, Tuple};
+use crate::generic::{Combine, Func, Either, HList, Tuple};
 pub use crate::{Context, Input};
 use thiserror::Error;
 
@@ -47,10 +47,14 @@ pub trait Parser: ParserBase {
         }
     }
 
-    fn exec<C>(self, command: for<'a> fn(&'a mut C, &'a Self::Extract) -> ()) -> Exec<Self, C>
+    fn exec<F, C>(self, command: F) -> Exec<Self, F>
     where
         Self: Sized,
-        Self::Extract: 'static,
+        C: Tuple,
+        F: Func<
+            <<<C as Tuple>::HList as Combine<<Self::Extract as Tuple>::HList>>::Output as HList>::Tuple
+        >,
+        <C as Tuple>::HList: Combine<<Self::Extract as Tuple>::HList>
     {
         Exec {
             parser: self,
@@ -118,7 +122,7 @@ where
     }
 }
 
-pub fn param<T: std::str::FromStr + Clone>() -> Param<T> {
+pub fn param<T: std::str::FromStr>() -> Param<T> {
     Param {
         param: Default::default(),
     }
@@ -132,22 +136,15 @@ mod tests {
     fn and_command() {
         let root = literal("hello")
             .and(literal("world"))
-            .exec(|n, ()| *n = 42)
-            .or(literal("foo").and(param::<i32>()).exec(|n, (a,)| *n += a));
+            .exec::<_, (_,)>(|n: &mut i32| *n = 42);
 
         let mut n = 45;
 
         if let Some((command,)) = root.parse(&mut "hello world".into()) {
-            command.call(&mut n);
+            command.call((&mut n,));
         }
 
         assert_eq!(n, 42);
-
-        if let Some((command,)) = root.parse(&mut "foo 10".into()) {
-            command.call(&mut n);
-        }
-
-        assert_eq!(n, 52);
 
         let command = root.parse(&mut "bar".into());
         assert!(command.is_none());
@@ -155,20 +152,27 @@ mod tests {
 
     #[test]
     fn or_command() {
-        // let command = literal("hello")
-        //     .exec(|| {
-        //         println!("hello");
-        //         Ok(())
-        //     });
+        let root = literal("hello")
+            .and(literal("world"))
+            .exec::<_, (_,)>(|n: &mut i32| *n = 42)
+            .or(literal("foo").and(param()).exec::<_, (_,)>(|n: &mut i32, a: i32| *n += a));
 
-        // let res = command.call(&mut State, &mut "hello".into());
-        // assert_eq!(res, Ok(()));
+        let mut n = 45;
 
-        // let res = command.call(&mut State, &mut "world".into());
-        // assert_eq!(res, Ok(()));
+        if let Some((command,)) = root.parse(&mut "hello world".into()) {
+            command.call((&mut n,));
+        }
 
-        // let res = command.call(&mut State, &mut "foo".into());
-        // assert_eq!(res, Err(CommandError::NotFound));
+        assert_eq!(n, 42);
+
+        if let Some((command,)) = root.parse(&mut "foo 10".into()) {
+            command.call((&mut n,));
+        }
+
+        assert_eq!(n, 52);
+
+        let command = root.parse(&mut "bar".into());
+        assert!(command.is_none());
     }
 
     #[test]
