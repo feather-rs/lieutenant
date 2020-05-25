@@ -1,17 +1,17 @@
 mod and;
 mod exec;
-mod or;
-mod untuple_one;
 mod map;
+mod or;
 mod unify;
+mod untuple_one;
 
 pub(crate) use self::and::And;
 pub(crate) use self::exec::{Command, Exec};
 pub(crate) use self::map::Map;
 pub(crate) use self::or::Or;
-pub(crate) use self::untuple_one::UntupleOne;
 pub(crate) use self::unify::Unify;
-use crate::generic::{Combine, Func, Either, HList, Tuple};
+pub(crate) use self::untuple_one::UntupleOne;
+use crate::generic::{Combine, Either, Func, HList, Tuple};
 pub use crate::{Context, Input};
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ pub trait ParserBase {
 }
 
 pub trait Parser: ParserBase {
-    fn and<F>(self, other: F) -> And<Self, F>
+    fn then<F>(self, other: F) -> And<Self, F>
     where
         Self: Sized,
         <Self::Extract as Tuple>::HList: Combine<<F::Extract as Tuple>::HList>,
@@ -166,8 +166,8 @@ mod tests {
     #[test]
     fn and_command() {
         let root = literal("hello")
-            .and(literal("world"))
-            .and(param())
+            .then(literal("world"))
+            .then(param())
             .map(|a: i32| move |n: &mut i32| *n += a);
 
         let mut n = 45;
@@ -185,37 +185,37 @@ mod tests {
     #[test]
     fn or_command() {
         let root = literal("hello")
-            .and(literal("world"))
+            .then(literal("world"))
             .map(|| |n: &mut i32| *n = 42)
-            .or(literal("foo").and(param()).map(|a: i32| move |n: &mut i32| *n += a));
+            .or(literal("foo")
+                .then(param())
+                .map(|a: i32| move |n: &mut i32| *n += a))
+            .or(literal("bar")
+                .map(|| |_: &mut i32| {}));
 
         let mut n = 45;
 
         if let Some((command,)) = root.parse(&mut "hello world".into()) {
-            match command {
-                Either::A((a,)) => a(&mut n),
-                Either::B((b,)) => b(&mut n),
-            }
+            command.call((&mut n,))
         }
 
         assert_eq!(n, 42);
 
         if let Some((command,)) = root.parse(&mut "foo 10".into()) {
-            match command {
-                Either::A((a,)) => a(&mut n),
-                Either::B((b,)) => b(&mut n),
-            }
+            command.call((&mut n,))
         }
 
         assert_eq!(n, 52);
 
         let command = root.parse(&mut "bar".into());
-        assert!(command.is_none());
+        assert!(command.is_some());
     }
 
     #[test]
     fn async_command() {
-        let root = literal("foo").and(param()).map(|a: i32| move |n: i32| async move { n + a });
+        let root = literal("foo")
+            .then(param())
+            .map(|a: i32| move |n: i32| async move { n + a });
 
         if let Some((command,)) = root.parse(&mut "foo 10".into()) {
             let res = smol::run(command(0));

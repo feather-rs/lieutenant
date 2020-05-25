@@ -14,6 +14,21 @@ pub enum Either<T, U> {
     B(U),
 }
 
+impl<T, U, Args, O> Func<Args> for Either<(T,), (U,)>
+where
+    T: Func<Args, Output = O>,
+    U: Func<Args, Output = O>,
+{
+    type Output = O;
+
+    fn call(&self, args: Args) -> Self::Output {
+        match self {
+            Either::A((a,)) => a.call(args),
+            Either::B((b,)) => b.call(args),
+        }
+    }    
+}
+
 pub trait HList: Sized {
     type Tuple: Tuple<HList = Self>;
 
