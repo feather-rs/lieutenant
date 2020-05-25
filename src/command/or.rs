@@ -1,4 +1,4 @@
-use super::{Parser, ParserBase, Input};
+use super::{Either, Input, Parser, ParserBase};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Or<T, U> {
@@ -9,17 +9,15 @@ pub struct Or<T, U> {
 impl<T, U> ParserBase for Or<T, U>
 where
     T: Parser,
-    U: Parser<Extract = T::Extract>,
+    U: Parser,
 {
-    type Extract = T::Extract;
+    type Extract = (Either<T::Extract, U::Extract>,);
 
-    fn parse<'i>(
-        &self,
-        input: &mut Input<'i>,
-    ) -> Option<Self::Extract> {
-        match self.first.parse(&mut input.clone()) {
-            ok @ Some(_) => ok,
-            _ => self.second.parse(input),
-        }
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+        let first = self.first.parse(&mut input.clone());
+        first
+            .map(|v| Either::A(v))
+            .or_else(|| self.second.parse(input).map(|v| Either::B(v)))
+            .map(|e| (e,))
     }
 }

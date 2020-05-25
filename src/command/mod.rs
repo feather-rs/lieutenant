@@ -7,7 +7,7 @@ pub(crate) use self::and::And;
 pub(crate) use self::exec::{Command, Exec};
 pub(crate) use self::or::Or;
 pub(crate) use self::untuple_one::UntupleOne;
-use crate::generic::{Combine, Func, HList, Tuple};
+use crate::generic::{Combine, Either, HList, Tuple};
 pub use crate::{Context, Input};
 use thiserror::Error;
 
@@ -98,6 +98,32 @@ pub fn literal(lit: &'static str) -> Literal {
     Literal { value: lit }
 }
 
+#[derive(Debug, Clone)]
+pub struct Param<T> {
+    param: std::marker::PhantomData<T>,
+}
+
+impl<T> ParserBase for Param<T>
+where
+    T: std::str::FromStr,
+{
+    type Extract = (T,);
+
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+        let head = input.advance_until(" ");
+        match T::from_str(head) {
+            Ok(ok) => Some((ok,)),
+            Err(_) => None,
+        }
+    }
+}
+
+pub fn param<T: std::str::FromStr + Clone>() -> Param<T> {
+    Param {
+        param: Default::default(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,7 +133,7 @@ mod tests {
         let root = literal("hello")
             .and(literal("world"))
             .exec(|n, ()| *n = 42)
-            .or(literal("foo").exec(|n, ()| *n += 42));
+            .or(literal("foo").and(param::<i32>()).exec(|n, (a,)| *n += a));
 
         let mut n = 45;
 
@@ -117,11 +143,11 @@ mod tests {
 
         assert_eq!(n, 42);
 
-        if let Some((command,)) = root.parse(&mut "foo".into()) {
+        if let Some((command,)) = root.parse(&mut "foo 10".into()) {
             command.call(&mut n);
         }
 
-        assert_eq!(n, 84);
+        assert_eq!(n, 52);
 
         let command = root.parse(&mut "bar".into());
         assert!(command.is_none());

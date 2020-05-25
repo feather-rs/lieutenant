@@ -1,4 +1,4 @@
-use super::{Input, Parser, ParserBase};
+use super::{Input, Either, Parser, ParserBase};
 
 #[derive(Clone)]
 pub struct Exec<P: Parser, C> {
@@ -33,6 +33,19 @@ pub struct ParsedCommand<E, C> {
 
 pub trait Command<C> {
     fn call(&self, ctx: &mut C);
+}
+
+impl<A, B, C> Command<C> for Either<(A,), (B,)>
+where
+    A: Command<C>,
+    B: Command<C>,
+{
+    fn call(&self, ctx: &mut C) {
+        match self {
+            Either::A((a,)) => a.call(ctx),
+            Either::B((b,)) => b.call(ctx),
+        }
+    }
 }
 
 impl<E, C> Command<C> for ParsedCommand<E, C> {
