@@ -2,11 +2,15 @@ mod and;
 mod exec;
 mod or;
 mod untuple_one;
+mod map;
+mod unify;
 
 pub(crate) use self::and::And;
 pub(crate) use self::exec::{Command, Exec};
+pub(crate) use self::map::Map;
 pub(crate) use self::or::Or;
 pub(crate) use self::untuple_one::UntupleOne;
+pub(crate) use self::unify::Unify;
 use crate::generic::{Combine, Func, Either, HList, Tuple};
 pub use crate::{Context, Input};
 use thiserror::Error;
@@ -47,14 +51,25 @@ pub trait Parser: ParserBase {
         }
     }
 
+    fn map<F>(self, fun: F) -> Map<Self, F>
+    where
+        Self: Sized,
+        F: Func<Self::Extract> + Clone,
+    {
+        Map {
+            parser: self,
+            callback: fun,
+        }
+    }
+
     fn exec<F, C>(self, command: F) -> Exec<Self, F>
     where
         Self: Sized,
-        C: Tuple,
         F: Func<
-            <<<C as Tuple>::HList as Combine<<Self::Extract as Tuple>::HList>>::Output as HList>::Tuple
+            <<<(C,) as Tuple>::HList as Combine<<Self::Extract as Tuple>::HList>>::Output as HList>::Tuple
         >,
-        <C as Tuple>::HList: Combine<<Self::Extract as Tuple>::HList>
+        <(C,) as Tuple>::HList: Combine<<Self::Extract as Tuple>::HList>,
+        (C,): Tuple,
     {
         Exec {
             parser: self,
@@ -68,6 +83,14 @@ pub trait Parser: ParserBase {
         T: Tuple,
     {
         UntupleOne { parser: self }
+    }
+
+    fn unify<T>(self) -> Unify<Self>
+    where
+        Self: Parser<Extract = (Either<T, T>,)> + Sized,
+        T: Tuple,
+    {
+        Unify { parser: self }
     }
 }
 
@@ -128,6 +151,14 @@ pub fn param<T: std::str::FromStr>() -> Param<T> {
     }
 }
 
+pub fn command<F, E>(exec: F) -> F
+where
+    E: Tuple,
+    F: Func<E>,
+{
+    exec
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,12 +167,12 @@ mod tests {
     fn and_command() {
         let root = literal("hello")
             .and(literal("world"))
-            .exec::<_, (_,)>(|n: &mut i32| *n = 42);
+            .map(|| |n: &mut i32| *n = 42);
 
         let mut n = 45;
 
         if let Some((command,)) = root.parse(&mut "hello world".into()) {
-            command.call((&mut n,));
+            command(&mut n)
         }
 
         assert_eq!(n, 42);
@@ -154,19 +185,25 @@ mod tests {
     fn or_command() {
         let root = literal("hello")
             .and(literal("world"))
-            .exec::<_, (_,)>(|n: &mut i32| *n = 42)
-            .or(literal("foo").and(param()).exec::<_, (_,)>(|n: &mut i32, a: i32| *n += a));
+            .map(|| |n: &mut i32| *n = 42)
+            .or(literal("foo").and(param()).map(|a: i32| move |n: &mut i32| *n += a));
 
         let mut n = 45;
 
         if let Some((command,)) = root.parse(&mut "hello world".into()) {
-            command.call((&mut n,));
+            match command {
+                Either::A((a,)) => a(&mut n),
+                Either::B((b,)) => b(&mut n),
+            }
         }
 
         assert_eq!(n, 42);
 
         if let Some((command,)) = root.parse(&mut "foo 10".into()) {
-            command.call((&mut n,));
+            match command {
+                Either::A((a,)) => a(&mut n),
+                Either::B((b,)) => b(&mut n),
+            }
         }
 
         assert_eq!(n, 52);
