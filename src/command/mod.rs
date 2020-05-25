@@ -167,11 +167,12 @@ mod tests {
     fn and_command() {
         let root = literal("hello")
             .and(literal("world"))
-            .map(|| |n: &mut i32| *n = 42);
+            .and(param())
+            .map(|a: i32| move |n: &mut i32| *n += a);
 
         let mut n = 45;
 
-        if let Some((command,)) = root.parse(&mut "hello world".into()) {
+        if let Some((command,)) = root.parse(&mut "hello world -3".into()) {
             command(&mut n)
         }
 
@@ -210,6 +211,16 @@ mod tests {
 
         let command = root.parse(&mut "bar".into());
         assert!(command.is_none());
+    }
+
+    #[test]
+    fn async_command() {
+        let root = literal("foo").and(param()).map(|a: i32| move |n: i32| async move { n + a });
+
+        if let Some((command,)) = root.parse(&mut "foo 10".into()) {
+            let res = smol::run(command(0));
+            assert_eq!(res, 10)
+        }
     }
 
     #[test]
