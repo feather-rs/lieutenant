@@ -12,6 +12,7 @@ pub(crate) use self::unify::Unify;
 pub(crate) use self::untuple_one::UntupleOne;
 use crate::generic::{Combine, Either, Func, HList, Tuple};
 pub use input::Input;
+use unicase::UniCase;
 
 pub trait ParserBase {
     type Extract: Tuple;
@@ -74,22 +75,29 @@ pub trait Parser: ParserBase {
 impl<T> Parser for T where T: ParserBase {}
 
 #[derive(Debug, Clone)]
-pub struct Literal {
-    value: &'static str,
+pub struct Literal<L> {
+    value: UniCase<L>,
 }
 
-impl AsRef<str> for Literal {
+impl<L> AsRef<str> for Literal<L>
+where
+    L: AsRef<str>
+{
     fn as_ref(&self) -> &str {
-        self.value
+        self.value.as_ref()
     }
 }
 
-impl ParserBase for Literal {
+impl<L> ParserBase for Literal<L>
+where
+    L: AsRef<str>
+{
     type Extract = ();
 
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
         let head = input.advance_until(" ");
-        let value = self.as_ref();
+        let head = &UniCase::new(head);
+        let value = &self.value;
         if value == head {
             Some(())
         } else {
@@ -98,8 +106,8 @@ impl ParserBase for Literal {
     }
 }
 
-pub fn literal(lit: &'static str) -> Literal {
-    Literal { value: lit }
+pub fn literal<L: AsRef<str>>(lit: L) -> Literal<L> {
+    Literal { value: UniCase::new(lit) }
 }
 
 #[derive(Debug, Clone)]
@@ -155,7 +163,7 @@ mod tests {
 
         let mut n = 45;
 
-        if let Some((command,)) = root.parse(&mut "hello world -3".into()) {
+        if let Some((command,)) = root.parse(&mut "Hello World -3".into()) {
             command(&mut n)
         }
 
@@ -177,7 +185,7 @@ mod tests {
 
         let mut n = 45;
 
-        if let Some((command,)) = root.parse(&mut "hello world".into()) {
+        if let Some((command,)) = root.parse(&mut "Hello World".into()) {
             command.call((&mut n,))
         }
 
