@@ -1,32 +1,25 @@
 #[derive(Debug)]
 pub struct Product<H, T: HList>(pub(crate) H, pub(crate) T);
 
-pub type One<T> = (T,);
-
-#[inline]
-pub(crate) fn one<T>(val: T) -> One<T> {
-    (val,)
-}
-
 #[derive(Debug)]
 pub enum Either<T, U> {
     A(T),
     B(U),
 }
 
-impl<T, U, Args, O> Func<Args> for Either<(T,), (U,)>
+impl<T, U, Args> Func<Args> for Either<(T,), (U,)>
 where
-    T: Func<Args, Output = O>,
-    U: Func<Args, Output = O>,
+    T: Func<Args>,
+    U: Func<Args, Output = T::Output>,
 {
-    type Output = O;
+    type Output = T::Output;
 
     fn call(&self, args: Args) -> Self::Output {
         match self {
             Either::A((a,)) => a.call(args),
             Either::B((b,)) => b.call(args),
         }
-    }    
+    }
 }
 
 pub trait HList: Sized {
@@ -55,7 +48,7 @@ pub trait Func<Args> {
 
 impl<T: HList> Combine<T> for () {
     type Output = T;
-    #[inline]
+
     fn combine(self, other: T) -> Self::Output {
         other
     }
@@ -68,7 +61,6 @@ where
 {
     type Output = Product<H, <T as Combine<U>>::Output>;
 
-    #[inline]
     fn combine(self, other: U) -> Self::Output {
         Product(self.0, self.1.combine(other))
     }
@@ -76,14 +68,13 @@ where
 
 impl HList for () {
     type Tuple = ();
-    #[inline]
+
     fn flatten(self) -> Self::Tuple {}
 }
 
 impl Tuple for () {
     type HList = ();
 
-    #[inline]
     fn hlist(self) -> Self::HList {}
 }
 
@@ -93,7 +84,6 @@ where
 {
     type Output = R;
 
-    #[inline]
     fn call(&self, _args: ()) -> Self::Output {
         (*self)()
     }
@@ -119,7 +109,7 @@ macro_rules! generics {
         impl<$type> HList for Product!($type) {
             type Tuple = ($type,);
 
-            #[inline]
+
             fn flatten(self) -> Self::Tuple {
                 (self.0,)
             }
@@ -127,7 +117,7 @@ macro_rules! generics {
 
         impl<$type> Tuple for ($type,) {
             type HList = Product!($type);
-            #[inline]
+
             fn hlist(self) -> Self::HList {
                 product!(self.0)
             }
@@ -139,7 +129,7 @@ macro_rules! generics {
         {
             type Output = R;
 
-            #[inline]
+
             fn call(&self, args: Product!($type)) -> Self::Output {
                 (*self)(args.0)
             }
@@ -152,7 +142,7 @@ macro_rules! generics {
         {
             type Output = R;
 
-            #[inline]
+
             fn call(&self, args: ($type,)) -> Self::Output {
                 (*self)(args.0)
             }
@@ -166,7 +156,7 @@ macro_rules! generics {
         impl<$type1, $( $type ),*> HList for Product!($type1, $($type),*) {
             type Tuple = ($type1, $( $type ),*);
 
-            #[inline]
+
             fn flatten(self) -> Self::Tuple {
                 #[allow(non_snake_case)]
                 let product_pat!($type1, $( $type ),*) = self;
@@ -177,7 +167,7 @@ macro_rules! generics {
         impl<$type1, $( $type ),*> Tuple for ($type1, $($type),*) {
             type HList = Product!($type1, $( $type ),*);
 
-            #[inline]
+
             fn hlist(self) -> Self::HList {
                 #[allow(non_snake_case)]
                 let ($type1, $( $type ),*) = self;
@@ -191,7 +181,7 @@ macro_rules! generics {
         {
             type Output = R;
 
-            #[inline]
+
             fn call(&self, args: Product!($type1, $($type),*)) -> Self::Output {
                 #[allow(non_snake_case)]
                 let product_pat!($type1, $( $type ),*) = args;
@@ -205,7 +195,7 @@ macro_rules! generics {
         {
             type Output = R;
 
-            #[inline]
+
             fn call(&self, args: ($type1, $($type),*)) -> Self::Output {
                 #[allow(non_snake_case)]
                 let ($type1, $( $type ),*) = args;

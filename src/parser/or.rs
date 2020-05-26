@@ -14,10 +14,10 @@ where
     type Extract = (Either<T::Extract, U::Extract>,);
 
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
-        let first = self.first.parse(&mut input.clone());
-        first
-            .map(|v| Either::A(v))
-            .or_else(|| self.second.parse(input).map(|v| Either::B(v)))
+        self.first
+            .parse(&mut input.clone())
+            .map(Either::A)
+            .or_else(|| self.second.parse(input).map(Either::B))
             .map(|e| (e,))
     }
 }

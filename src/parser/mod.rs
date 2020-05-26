@@ -1,25 +1,17 @@
 mod and;
-mod exec;
+mod input;
 mod map;
 mod or;
 mod unify;
 mod untuple_one;
 
 pub(crate) use self::and::And;
-pub(crate) use self::exec::{Command, Exec};
 pub(crate) use self::map::Map;
 pub(crate) use self::or::Or;
 pub(crate) use self::unify::Unify;
 pub(crate) use self::untuple_one::UntupleOne;
 use crate::generic::{Combine, Either, Func, HList, Tuple};
-pub use crate::{Context, Input};
-use thiserror::Error;
-
-#[derive(Debug, Error, PartialEq, Eq, PartialOrd, Ord)]
-pub enum CommandError {
-    #[error("could not find the given command")]
-    NotFound,
-}
+pub use input::Input;
 
 pub trait ParserBase {
     type Extract: Tuple;
@@ -62,21 +54,6 @@ pub trait Parser: ParserBase {
         }
     }
 
-    fn exec<F, C>(self, command: F) -> Exec<Self, F>
-    where
-        Self: Sized,
-        F: Func<
-            <<<(C,) as Tuple>::HList as Combine<<Self::Extract as Tuple>::HList>>::Output as HList>::Tuple
-        >,
-        <(C,) as Tuple>::HList: Combine<<Self::Extract as Tuple>::HList>,
-        (C,): Tuple,
-    {
-        Exec {
-            parser: self,
-            command: command,
-        }
-    }
-
     fn untuple_one<T>(self) -> UntupleOne<Self>
     where
         Self: Parser<Extract = (T,)> + Sized,
@@ -111,8 +88,8 @@ impl ParserBase for Literal {
     type Extract = ();
 
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
-        let head = input.advance_until(" ").to_lowercase();
-        let value = self.as_ref().to_lowercase();
+        let head = input.advance_until(" ");
+        let value = self.as_ref();
         if value == head {
             Some(())
         } else {
@@ -151,12 +128,18 @@ pub fn param<T: std::str::FromStr>() -> Param<T> {
     }
 }
 
-pub fn command<F, E>(exec: F) -> F
-where
-    E: Tuple,
-    F: Func<E>,
-{
-    exec
+pub struct Any;
+
+impl ParserBase for Any {
+    type Extract = ();
+
+    fn parse<'i>(&self, _input: &mut Input<'i>) -> Option<Self::Extract> {
+        Some(())
+    }
+}
+
+pub fn any() -> Any {
+    Any
 }
 
 #[cfg(test)]
@@ -190,8 +173,7 @@ mod tests {
             .or(literal("foo")
                 .then(param())
                 .map(|a: i32| move |n: &mut i32| *n += a))
-            .or(literal("bar")
-                .map(|| |_: &mut i32| {}));
+            .or(literal("bar").map(|| |_: &mut i32| {}));
 
         let mut n = 45;
 
@@ -221,13 +203,5 @@ mod tests {
             let res = smol::run(command(0));
             assert_eq!(res, 10)
         }
-    }
-
-    #[test]
-    fn guard_command() {
-        // let command = guard(|_: &mut State| Ok(())).and(literal("hello")).exec(|| Ok(()));
-
-        // let res = command.parse(&mut State, &mut "hello".into());
-        // assert!(res.is_ok());
     }
 }

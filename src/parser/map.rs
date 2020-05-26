@@ -1,4 +1,4 @@
-use super::{Func, Parser, ParserBase, Input};
+use super::{Func, Input, Parser, ParserBase};
 #[derive(Clone)]
 pub struct Map<P, F> {
     pub(super) parser: P,
@@ -8,11 +8,10 @@ pub struct Map<P, F> {
 impl<P, F> ParserBase for Map<P, F>
 where
     P: Parser,
-    F: Func<P::Extract> + Clone,
+    F: Func<P::Extract>,
 {
     type Extract = (F::Output,);
 
-    #[inline]
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
         let ex = self.parser.parse(input)?;
         Some((self.callback.call(ex),))
