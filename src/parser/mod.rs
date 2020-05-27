@@ -136,11 +136,13 @@ pub fn param<T: std::str::FromStr>() -> Param<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct Any;
 
 impl ParserBase for Any {
     type Extract = ();
 
+    #[inline]
     fn parse<'i>(&self, _input: &mut Input<'i>) -> Option<Self::Extract> {
         Some(())
     }

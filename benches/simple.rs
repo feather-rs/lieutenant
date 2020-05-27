@@ -1,5 +1,15 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use lieutenant::{literal, any, param, Input, Parser, ParserBase};
+use lieutenant::{any, literal, param, Input, Parser, ParserBase};
+
+pub fn input_head(c: &mut Criterion) {
+    let input: Input = "hello world".into();
+    c.bench_function("input head", |b| {
+        let mut input = input.clone();
+        b.iter(|| {
+            let _ = input.advance_until(" ");
+        })
+    });
+}
 
 pub fn single_literal(c: &mut Criterion) {
     let root = literal("hello");
@@ -12,10 +22,36 @@ pub fn single_literal(c: &mut Criterion) {
     });
 }
 
-pub fn single_any(c: &mut Criterion) {
+pub fn zero_cost(c: &mut Criterion) {
     let root = any();
     let input: Input = "".into();
-    c.bench_function("any", |b| {
+    c.bench_function("single any", |b| {
+        let input = input.clone();
+        b.iter(|| {
+            let _ = root.parse(&mut black_box(input));
+        })
+    });
+
+    let root = any()
+        .then(any());
+
+    c.bench_function("two anys", |b| {
+        let input = input.clone();
+        b.iter(|| {
+            let _ = root.parse(&mut black_box(input));
+        })
+    });
+
+    let root = any()
+        .then(any())
+        .then(any())
+        .then(any())
+        .then(any())
+        .then(any())
+        .then(any())
+        .then(any());
+
+    c.bench_function("multiple anys", |b| {
         let input = input.clone();
         b.iter(|| {
             let _ = root.parse(&mut black_box(input));
@@ -49,5 +85,11 @@ pub fn with_context(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, single_any, single_literal, with_context);
+criterion_group!(
+    benches,
+    input_head,
+    zero_cost,
+    single_literal,
+    with_context
+);
 criterion_main!(benches);

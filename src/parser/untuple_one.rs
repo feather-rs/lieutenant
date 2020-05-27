@@ -12,6 +12,7 @@ where
 {
     type Extract = T;
 
+    #[inline]
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
         match self.parser.parse(input) {
             Some((arg,)) => Some(arg),

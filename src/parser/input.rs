@@ -10,6 +10,7 @@ impl<'a> Input<'a> {
 
     /// Advances the pointer until the given pattern has been reached, returning
     /// the consumed characters.
+    #[inline]
     pub fn advance_until<'b>(&'b mut self, pat: &str) -> &'a str {
         let head = self.ptr.split(pat).next().unwrap_or("");
         self.ptr = &self.ptr[(head.len() + pat.len()).min(self.ptr.len())..];
@@ -18,6 +19,7 @@ impl<'a> Input<'a> {
 
     /// Advances until the end of input, returning all
     /// consumed characters.
+    #[inline]
     pub fn advance_to_end(&mut self) -> &'a str {
         let head = self.ptr;
         self.ptr = &self.ptr[self.ptr.len()..];
@@ -25,11 +27,13 @@ impl<'a> Input<'a> {
     }
 
     /// Returns the number of remaining characters to read.
+    #[inline]
     pub fn len(&self) -> usize {
         self.ptr.len()
     }
 
     /// Returns whether there are no more characters to read.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

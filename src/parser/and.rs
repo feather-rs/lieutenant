@@ -18,6 +18,7 @@ where
 {
     type Extract = Combined<T, U>;
     
+    #[inline]
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
         let first = self.first.parse(input)?.hlist();
         let second = self.second.parse(input)?.hlist();

@@ -13,6 +13,7 @@ where
 {
     type Extract = (Either<T::Extract, U::Extract>,);
 
+    #[inline]
     fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
         self.first
             .parse(&mut input.clone())
