@@ -57,6 +57,13 @@ pub fn zero_cost(c: &mut Criterion) {
             let _ = root.parse(&mut black_box(input));
         })
     });
+
+    c.bench_function("multiple anys without blackbox", |b| {
+        let mut input = input.clone();
+        b.iter(|| {
+            let _ = root.parse(&mut input);
+        })
+    });
 }
 
 pub fn with_context(c: &mut Criterion) {
