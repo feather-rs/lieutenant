@@ -70,6 +70,14 @@ pub trait Parser: ParserBase {
     {
         Unify { parser: self }
     }
+
+    fn boxed(self) -> Box<dyn Parser<Extract = Self::Extract>>
+    where
+        Self: Sized,
+        Self: 'static,
+    {
+        Box::new(self)
+    }
 }
 
 impl<T> Parser for T where T: ParserBase {}
@@ -136,7 +144,7 @@ pub fn param<T: std::str::FromStr>() -> Param<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Any;
 
 impl ParserBase for Any {
@@ -150,6 +158,30 @@ impl ParserBase for Any {
 
 pub fn any() -> Any {
     Any
+}
+
+use std::collections::HashMap;
+
+#[derive(Default)]
+pub struct Literals<E>(HashMap<UniCase<&'static str>, Box<dyn Parser<Extract = E>>>);
+
+impl<E> ParserBase for Literals<E>
+where
+    E: Tuple,
+{
+    type Extract = E;
+
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+        let head = input.advance_until(" ");
+        let head = &UniCase::new(head);
+        self.0.get(head)?.parse(input)
+    }
+}
+
+impl<E> Literals<E> {
+    pub fn insert(&mut self, lit: &'static str, parser: Box<dyn Parser<Extract = E>>) {
+        self.0.insert(UniCase::new(lit), parser);
+    }
 }
 
 #[cfg(test)]
@@ -213,5 +245,22 @@ mod tests {
             let res = smol::run(command(0));
             assert_eq!(res, 10)
         }
+    }
+
+    #[test]
+    fn hashed_literals() {
+        let mut root: Literals<()> = Literals::default();
+        root.insert("a0", any().boxed());
+        root.insert("a1", any().boxed());
+        root.insert("a2", any().boxed());
+        root.insert("a3", any().boxed());
+        root.insert("a4", any().boxed());
+        root.insert("a5", any().boxed());
+        root.insert("a6", any().boxed());
+        root.insert("a7", any().boxed());
+        root.insert("a8", any().boxed());
+        root.insert("a9", any().boxed());
+
+        assert!(root.parse(&mut "a1".into()).is_some())
     }
 }
