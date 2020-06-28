@@ -96,7 +96,7 @@ where
 
         if let Some(key) = node_key {
             let node = &mut self.nodes[*key];
-            node.execs.push(spec.exec.clone());
+            node.execs.push(spec.exec);
         } else {
             // Command with zero arguments?
             return Err(RegisterError::ExecutableRoot);
