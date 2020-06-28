@@ -22,7 +22,9 @@ impl<'a> Input<'a> {
     /// Advances until the end of input, returning all
     /// consumed characters.
     pub fn advance_to_end(&mut self) -> &'a str {
-        self.ptr
+        let consumed = self.ptr;
+        self.ptr = &self.ptr[self.ptr.len()..];
+        consumed
     }
 
     /// Returns the number of remaining characters to read.
@@ -118,4 +120,76 @@ mod arguments {
         NonZeroUsize,
         PathBuf,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Input;
+
+    #[test]
+    fn input_advance_until() {
+        let command = "cmd";
+        let values = ["value1", "value2 with spaces", "value3"];
+
+        let args = [command, &values.join(", ")].join(" ");
+        let mut input = Input::new(&args);
+
+        assert_eq!(input.advance_until(" "), command);
+        assert_eq!(input.advance_until(", "), values[0]);
+        assert_eq!(input.advance_until(", "), values[1]);
+        assert_eq!(input.advance_until("INVALID"), values[2]);
+        assert_eq!(input.advance_until(" "), "");
+    }
+
+    #[test]
+    fn input_advance_to_end() {
+        let input_str = "first; second and third";
+        let mut input = Input::new(input_str);
+
+        assert_eq!(input.advance_to_end(), input_str);
+        assert!(input.is_empty());
+        assert_eq!(input.advance_to_end(), "");
+        assert!(input.is_empty());
+    }
+
+    #[test]
+    fn input_len() {
+        let input_str = "first :: second :: third";
+        let mut input = Input::new(input_str);
+        let pattern = " :: ";
+
+        assert_eq!(input.len(), input_str.len());
+
+        let first = input.advance_until(pattern);
+        assert_eq!(first, "first");
+        assert_eq!(input.len(), input_str.len() - (first.len() + pattern.len()));
+
+        let second = input.advance_until(pattern);
+        assert_eq!(second, "second");
+        assert_eq!(
+            input.len(),
+            input_str.len() - (first.len() + second.len() + 2 * pattern.len())
+        );
+
+        let third = input.advance_to_end();
+        assert_eq!(third, "third");
+        assert_eq!(
+            input.len(),
+            input_str.len() - (first.len() + second.len() + third.len() + 2 * pattern.len())
+        );
+    }
+
+    #[test]
+    fn input_empty() {
+        let input_str = "first,second,third";
+        let mut input = Input::new(input_str);
+
+        assert!(!input.is_empty());
+        input.advance_until(",");
+        assert!(!input.is_empty());
+        input.advance_until(",");
+        assert!(!input.is_empty());
+        input.advance_to_end();
+        assert!(input.is_empty());
+    }
 }
