@@ -22,7 +22,9 @@ impl<'a> Input<'a> {
     /// Advances until the end of input, returning all
     /// consumed characters.
     pub fn advance_to_end(&mut self) -> &'a str {
-        self.ptr
+        let consumed = self.ptr;
+        self.ptr = &self.ptr[self.ptr.len()..];
+        consumed
     }
 
     /// Returns the number of remaining characters to read.
