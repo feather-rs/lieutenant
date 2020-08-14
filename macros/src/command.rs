@@ -121,7 +121,7 @@ fn parse_usage(usage: &str) -> Usage {
     // literal|literal2...: one or more possible literal parameters
     for splitted in usage.split(' ') {
         let (first, middle) = splitted.split_at(1.min(splitted.len()));
-        let (middle, last) = middle.split_at(middle.len() - 1);
+        let (middle, last) = middle.split_at(middle.len().saturating_sub(1));
         match (first, middle, last) {
             ("<", param, ">") => arguments.push(Argument::Parameter {
                 name: param.to_owned(),
