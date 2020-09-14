@@ -1,4 +1,4 @@
-use super::{Either, Input, Parser, ParserBase, Tuple};
+use super::{Either, Input, Parser, ParserBase, Tuple, Result};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Unify<F> {
@@ -13,11 +13,11 @@ where
     type Extract = T;
 
     #[inline]
-    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Result<Self::Extract> {
         let (ex,) = self.parser.parse(input)?;
-        match ex {
-            Either::A(a) => Some(a),
-            Either::B(b) => Some(b),
-        }
+        Ok(match ex {
+            Either::A(a) => a,
+            Either::B(b) => b,
+        })
     }
 }

@@ -8,6 +8,30 @@ impl<'a> Input<'a> {
         Self { ptr }
     }
 
+    pub fn take(&mut self, n: usize) -> &'a str {
+        let n = self
+            .ptr
+            .char_indices()
+            .skip(n)
+            .next()
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let head = &self.ptr[..n];
+        self.ptr = &self.ptr[n..];
+        head
+    }
+
+    /// Advances the pointer by the number of trimed spaces. 
+    pub fn trim_start(&mut self) {
+        self.ptr = self.ptr.trim_start();
+    }
+
+    pub fn take_bytes(&mut self, n: usize) -> Option<&'a str> {
+        let head = self.ptr.get(..n)?;
+        self.ptr = &self.ptr[n..];
+        Some(head)
+    }
+
     /// Advances the pointer until the given pattern has been reached, returning
     /// the consumed characters.
     #[inline]

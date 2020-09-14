@@ -1,44 +1,61 @@
-mod and;
-mod input;
+mod then;
 mod map;
-mod or;
+mod alt;
 mod unify;
 mod untuple_one;
+mod executor;
 
-pub(crate) use self::and::And;
+pub(crate) use self::then::Then;
 pub(crate) use self::map::Map;
-pub(crate) use self::or::Or;
+pub(crate) use self::alt::Alt;
 pub(crate) use self::unify::Unify;
 pub(crate) use self::untuple_one::UntupleOne;
-use crate::generic::{Combine, Either, Func, HList, Tuple};
-pub use input::Input;
-use unicase::UniCase;
+pub(crate) use self::executor::Executor;
+
+pub(crate) use crate::generic::{Combine, Either, Func, HList, Tuple};
+
+pub use crate::Input;
+
+use std::borrow::Cow;
+
+#[derive(Debug)]
+pub enum Error {
+    // Exact
+    Literal(Cow<'static, str>),
+    // OneOf
+    Literals(Vec<Cow<'static, str>>),
+    Todo,
+    UnkownCommand,
+}
+
+pub type Result<Extract> = ::std::result::Result<Extract, Error>;
 
 pub trait ParserBase {
     type Extract: Tuple;
 
-    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract>;
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Result<Self::Extract>;
 }
 
 pub trait Parser: ParserBase {
-    fn then<F>(self, other: F) -> And<Self, F>
+    fn then<F>(self, other: F) -> Then<Self, F>
     where
         Self: Sized,
         <Self::Extract as Tuple>::HList: Combine<<F::Extract as Tuple>::HList>,
         F: Parser + Clone,
     {
-        And {
+        Then {
             first: self,
             second: other,
         }
     }
 
-    fn or<F>(self, other: F) -> Or<Self, F>
+    /// Alternative parser
+    fn alt<F>(self, other: F) -> Alt<Self, F>
     where
         Self: Sized,
         F: Parser,
     {
-        Or {
+        Alt {
             first: self,
             second: other,
         }
@@ -71,122 +88,39 @@ pub trait Parser: ParserBase {
         Unify { parser: self }
     }
 
-    fn boxed(self) -> Box<dyn Parser<Extract = Self::Extract>>
+    fn boxed<'a>(self) -> Box<dyn Parser<Extract = Self::Extract>>
     where
         Self: Sized,
         Self: 'static,
     {
         Box::new(self)
     }
+
+    fn execute<S, F>(self, fun: F) -> Executor<Self, S, F>
+    where
+        Self: Sized,
+        <Self::Extract as Tuple>::HList: Combine<S::HList>,
+        S: Tuple,
+        F: Func<<<<Self::Extract as Tuple>::HList as Combine<S::HList>>::Output as HList>::Tuple>
+            + Clone,
+    {
+        Executor {
+            parser: self,
+            state: Default::default(),
+            callback: fun,
+        }
+    }
 }
 
 impl<T> Parser for T where T: ParserBase {}
 
-#[derive(Debug, Clone)]
-pub struct Literal<L> {
-    value: UniCase<L>,
-}
-
-impl<L> AsRef<str> for Literal<L>
-where
-    L: AsRef<str>
-{
-    fn as_ref(&self) -> &str {
-        self.value.as_ref()
-    }
-}
-
-impl<L> ParserBase for Literal<L>
-where
-    L: AsRef<str>
-{
-    type Extract = ();
-
-    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
-        let head = input.advance_until(" ");
-        let head = &UniCase::new(head);
-        let value = &self.value;
-        if value == head {
-            Some(())
-        } else {
-            None
-        }
-    }
-}
-
-pub fn literal<L: AsRef<str>>(lit: L) -> Literal<L> {
-    Literal { value: UniCase::new(lit) }
-}
-
-#[derive(Debug, Clone)]
-pub struct Param<T> {
-    param: std::marker::PhantomData<T>,
-}
-
-impl<T> ParserBase for Param<T>
-where
-    T: std::str::FromStr,
-{
-    type Extract = (T,);
-
-    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
-        let head = input.advance_until(" ");
-        match T::from_str(head) {
-            Ok(ok) => Some((ok,)),
-            Err(_) => None,
-        }
-    }
-}
-
-pub fn param<T: std::str::FromStr>() -> Param<T> {
-    Param {
-        param: Default::default(),
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Any;
-
-impl ParserBase for Any {
-    type Extract = ();
-
-    #[inline]
-    fn parse<'i>(&self, _input: &mut Input<'i>) -> Option<Self::Extract> {
-        Some(())
-    }
-}
-
-pub fn any() -> Any {
-    Any
-}
-
-use std::collections::HashMap;
-
-#[derive(Default)]
-pub struct Literals<E>(HashMap<UniCase<&'static str>, Box<dyn Parser<Extract = E>>>);
-
-impl<E> ParserBase for Literals<E>
-where
-    E: Tuple,
-{
-    type Extract = E;
-
-    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
-        let head = input.advance_until(" ");
-        let head = &UniCase::new(head);
-        self.0.get(head)?.parse(input)
-    }
-}
-
-impl<E> Literals<E> {
-    pub fn insert(&mut self, lit: &'static str, parser: Box<dyn Parser<Extract = E>>) {
-        self.0.insert(UniCase::new(lit), parser);
-    }
-}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::ParserBase;
+    use crate::generic::{FuncOnce, Func};
+    use crate::{Parser, CommandDispatcher, State, RefMut};
+    use crate::parsers::{Literals, any, param, literal};
 
     #[test]
     fn and_command() {
@@ -195,56 +129,89 @@ mod tests {
             .then(param())
             .map(|a: i32| move |n: &mut i32| *n += a);
 
+        let state = 69;
+
+        let foo = literal("foo")
+            .then(param())
+            .execute(|_a: u32, _state: i32| {})
+            .alt(literal("boo").execute(|_state: i32| {}));
+
+        if let Ok((command,)) = foo.parse(&mut "foo -32".into()) {
+            command.call((state,));
+        }
+
         let mut n = 45;
 
-        if let Some((command,)) = root.parse(&mut "Hello World -3".into()) {
+        if let Ok((command,)) = root.parse(&mut "Hello World -3".into()) {
             command(&mut n)
         }
 
         assert_eq!(n, 42);
 
         let command = root.parse(&mut "bar".into());
-        assert!(command.is_none());
+        assert!(command.is_err());
+    }
+
+    struct PlayerState(i32, i32, i32);
+
+    impl State for PlayerState {
+        fn get<T>(&self) -> Option<T> {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn new_api() {
+        let mut dispatcher = CommandDispatcher::default();
+        dispatcher.register(
+            "tp",
+            param::<i32>()
+                .then(param::<i32>())
+                .then(param::<i32>())
+                .execute::<((_, _, _),), _>(|x: i32, y: i32, z: i32, (player_x, player_y, player_z): (RefMut<i32>, RefMut<i32>, RefMut<i32>)| {
+                    // player_x.as_mut() = x;
+                    // player_y.as_mut() = y;
+                    // player_z.as_mut() = z;     
+                }),
+        );
+
+        let result = dispatcher.call(PlayerState(0, 0, 0), "tp 10 20 30");
+        dbg!(&result);
+        assert!(result.is_ok())
     }
 
     #[test]
     fn or_command() {
-        let root = literal("hello")
-            .then(literal("world"))
-            .map(|| |n: &mut i32| *n = 42)
-            .or(literal("foo")
-                .then(param())
-                .map(|a: i32| move |n: &mut i32| *n += a))
-            .or(literal("bar").map(|| |_: &mut i32| {}));
+        let add = literal("add")
+            .then(param())
+            .map(|n: i32| move |state: &mut i32| *state += n);
+
+        let times = literal("times")
+            .then(param())
+            .map(|n: i32| move |state: &mut i32| *state *= n);
+
+        let reset = literal("reset").map(|| |state: &mut i32| *state = 0);
+        let root = literal("math").then(add.alt(times).alt(reset));
 
         let mut n = 45;
 
-        if let Some((command,)) = root.parse(&mut "Hello World".into()) {
+        if let Ok((command,)) = root.parse(&mut "math add 10".into()) {
             command.call((&mut n,))
         }
+        assert_eq!(n, 55);
 
-        assert_eq!(n, 42);
-
-        if let Some((command,)) = root.parse(&mut "foo 10".into()) {
+        if let Ok((command,)) = root.parse(&mut "math times 10".into()) {
             command.call((&mut n,))
         }
+        assert_eq!(n, 550);
 
-        assert_eq!(n, 52);
-
-        let command = root.parse(&mut "bar".into());
-        assert!(command.is_some());
-    }
-
-    #[test]
-    fn async_command() {
-        let root = literal("foo")
-            .then(param())
-            .map(|a: i32| move |n: i32| async move { n + a });
-
-        if let Some((command,)) = root.parse(&mut "foo 10".into()) {
-            let res = smol::run(command(0));
-            assert_eq!(res, 10)
+        if let Ok((command,)) = root.parse(&mut "math reset".into()) {
+            command.call((&mut n,))
         }
+        assert_eq!(n, 0);
+
+        let command = root.parse(&mut "foo".into());
+        assert!(command.is_err());
     }
 
     #[test]
@@ -261,6 +228,6 @@ mod tests {
         root.insert("a8", any().boxed());
         root.insert("a9", any().boxed());
 
-        assert!(root.parse(&mut "a1".into()).is_some())
+        assert!(root.parse(&mut "a1".into()).is_ok())
     }
 }

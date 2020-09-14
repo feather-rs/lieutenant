@@ -22,6 +22,21 @@ where
     }
 }
 
+impl<T, U, Args> FuncOnce<Args> for Either<(T,), (U,)>
+where
+    T: FuncOnce<Args>,
+    U: FuncOnce<Args, Output = T::Output>,
+{
+    type Output = T::Output;
+
+    fn call(self, args: Args) -> Self::Output {
+        match self {
+            Either::A((a,)) => a.call(args),
+            Either::B((b,)) => b.call(args),
+        }
+    }
+}
+
 pub trait HList: Sized {
     type Tuple: Tuple<HList = Self>;
 
@@ -46,6 +61,12 @@ pub trait Func<Args> {
     fn call(&self, args: Args) -> Self::Output;
 }
 
+pub trait FuncOnce<Args> {
+    type Output;
+
+    fn call(self, args: Args) -> Self::Output;
+}
+
 impl<T: HList> Combine<T> for () {
     type Output = T;
 
@@ -54,6 +75,7 @@ impl<T: HList> Combine<T> for () {
         other
     }
 }
+
 
 impl<H, T: HList, U: HList> Combine<U> for Product<H, T>
 where

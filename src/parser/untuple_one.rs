@@ -1,4 +1,4 @@
-use super::{Input, Parser, ParserBase, Tuple};
+use super::{Input, Parser, ParserBase, Tuple, Result};
 
 #[derive(Clone, Copy, Debug)]
 pub struct UntupleOne<P> {
@@ -13,10 +13,10 @@ where
     type Extract = T;
 
     #[inline]
-    fn parse<'i>(&self, input: &mut Input<'i>) -> Option<Self::Extract> {
+    fn parse<'i>(&self, input: &mut Input<'i>) -> Result<Self::Extract> {
         match self.parser.parse(input) {
-            Some((arg,)) => Some(arg),
-            None => None,
+            Ok((arg,)) => Ok(arg),
+            Err(err) => Err(err),
         }
     }
 }
