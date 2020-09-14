@@ -1,5 +1,5 @@
 use crate::parser::{Parser, ParserBase, Result};
-use crate::parsers::{Literals, literals};
+use crate::parsers::{Literals};
 use crate::{Command, State};
 use std::borrow::Cow;
 

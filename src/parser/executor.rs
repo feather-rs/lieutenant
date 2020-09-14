@@ -1,22 +1,19 @@
 
-use std::marker::PhantomData;
-use super::{Parser, ParserBase, Tuple, HList, Combine, Input, Func, Result};
+use super::{Parser, ParserBase, Tuple, HList, Combine, Input, Func, Result, Realize};
 use crate::command::CommandMapping;
 
-pub struct Executor<P, S, F> {
+pub struct Executor<P, F> {
     pub(super) parser: P,
-    pub(super) state: PhantomData<S>,
     pub(super) callback: F,
 }
 
-impl<P, S, F> ParserBase for Executor<P, S, F>
+impl<P, F> ParserBase for Executor<P, F>
 where
     P: Parser,
-    <P::Extract as Tuple>::HList: Combine<S::HList>,
-    S: Tuple,
-    F: Func<<<<P::Extract as Tuple>::HList as Combine<S::HList>>::Output as HList>::Tuple> + Clone,
+    P::Extract: Realize,
+    F: Func<<P::Extract as Realize>::Output> + Clone,
 {
-    type Extract = (CommandMapping<P::Extract, S, F>,);
+    type Extract = (CommandMapping<P::Extract, F>,);
 
     #[inline]
     fn parse<'i>(&self, input: &mut Input<'i>) -> Result<Self::Extract> {

@@ -96,19 +96,42 @@ pub trait Parser: ParserBase {
         Box::new(self)
     }
 
-    fn execute<S, F>(self, fun: F) -> Executor<Self, S, F>
+    fn execute<F>(self, fun: F) -> Executor<Self, F>
     where
         Self: Sized,
-        <Self::Extract as Tuple>::HList: Combine<S::HList>,
-        S: Tuple,
-        F: Func<<<<Self::Extract as Tuple>::HList as Combine<S::HList>>::Output as HList>::Tuple>
-            + Clone,
+        Self::Extract: Realize,
+        F: Func<<Self::Extract as Realize>::Output> + Clone,
     {
         Executor {
             parser: self,
-            state: Default::default(),
             callback: fun,
         }
+    }
+}
+
+pub trait Realize {
+    type State;
+    type Output: Tuple;
+    
+    fn realize(self, state: &Self::State) -> Self::Output;
+}
+
+pub struct Const<T>(T);
+
+impl<T: Tuple> Realize for Const<T> {
+    type Output = T;
+    type State = ();
+    fn realize(self, state: &Self::State) -> Self::Output {
+        self.0
+    }
+}
+
+impl Realize for (Const<(i32,)>, Const<(i32,)>, Const<(i32,)>) {
+    type Output = (i32, i32, i32);
+    type State = ();
+
+    fn realize(self, state: &Self::State) -> Self::Output {
+        (self.0.realize(state).0, self.1.realize(state).0, self.2.realize(state).0)
     }
 }
 
@@ -117,7 +140,7 @@ impl<T> Parser for T where T: ParserBase {}
 
 #[cfg(test)]
 mod tests {
-    use super::ParserBase;
+    use super::{ParserBase, Const};
     use crate::generic::{FuncOnce, Func};
     use crate::{Parser, CommandDispatcher, State, RefMut};
     use crate::parsers::{Literals, any, param, literal};
@@ -131,14 +154,14 @@ mod tests {
 
         let state = 69;
 
-        let foo = literal("foo")
-            .then(param())
-            .execute(|_a: u32, _state: i32| {})
-            .alt(literal("boo").execute(|_state: i32| {}));
+        // let foo = literal("foo")
+        //     .then(param())
+        //     .execute(|_a: u32| {})
+        //     .alt(literal("boo").execute(|| {}));
 
-        if let Ok((command,)) = foo.parse(&mut "foo -32".into()) {
-            command.call((state,));
-        }
+        // if let Ok((command,)) = foo.parse(&mut "foo -32".into()) {
+        //     command.call((state,));
+        // }
 
         let mut n = 45;
 
@@ -162,22 +185,17 @@ mod tests {
 
     #[test]
     fn new_api() {
-        let mut dispatcher = CommandDispatcher::default();
-        dispatcher.register(
-            "tp",
-            param::<i32>()
-                .then(param::<i32>())
-                .then(param::<i32>())
-                .execute::<((_, _, _),), _>(|x: i32, y: i32, z: i32, (player_x, player_y, player_z): (RefMut<i32>, RefMut<i32>, RefMut<i32>)| {
-                    // player_x.as_mut() = x;
-                    // player_y.as_mut() = y;
-                    // player_z.as_mut() = z;     
-                }),
-        );
+        // let mut dispatcher = CommandDispatcher::default();
+        let foo = param::<i32>()
+            .then(param::<i32>())
+            .then(param::<i32>())
+            .map(|x: i32, y: i32, z: i32| (Const((x,)), Const((y,)), Const((z,))))
+            .untuple_one()
+            .execute(|x: i32, y: i32, z: i32| todo!());
 
-        let result = dispatcher.call(PlayerState(0, 0, 0), "tp 10 20 30");
-        dbg!(&result);
-        assert!(result.is_ok())
+        // let result = dispatcher.call(PlayerState(0, 0, 0), "tp 10 20 30");
+        // dbg!(&result);
+        // assert!(result.is_ok())
     }
 
     #[test]
