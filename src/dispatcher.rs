@@ -25,10 +25,7 @@ where
         }
     }
 
-    pub fn call<S>(&self, state: S, command: &str) -> Result<E::Output>
-    where
-        S: State,
-    {
+    pub fn call(&self, state: &E::State, command: &str) -> Result<E::Output> {
         Ok(self.literals.parse(&mut command.into())?.0.call(state))
     }
 

@@ -99,8 +99,8 @@ pub trait Parser: ParserBase {
     fn execute<F>(self, fun: F) -> Executor<Self, F>
     where
         Self: Sized,
-        Self::Extract: Realize,
-        F: Func<<Self::Extract as Realize>::Output> + Clone,
+        Self::Extract: Lazy,
+        F: Func<<Self::Extract as Lazy>::Output> + Clone,
     {
         Executor {
             parser: self,
@@ -109,29 +109,34 @@ pub trait Parser: ParserBase {
     }
 }
 
-pub trait Realize {
+pub trait Lazy {
     type State;
-    type Output: Tuple;
+    type Output;
     
-    fn realize(self, state: &Self::State) -> Self::Output;
+    fn get(self, state: &Self::State) -> Self::Output;
 }
 
 pub struct Const<T>(T);
 
-impl<T: Tuple> Realize for Const<T> {
+impl<T> Lazy for Const<T> {
     type Output = T;
     type State = ();
-    fn realize(self, state: &Self::State) -> Self::Output {
+    fn get(self, _state: &Self::State) -> Self::Output {
         self.0
     }
 }
 
-impl Realize for (Const<(i32,)>, Const<(i32,)>, Const<(i32,)>) {
-    type Output = (i32, i32, i32);
-    type State = ();
+impl<T1, T2, T3> Lazy for (T1, T2, T3) 
+where 
+    T1: Lazy, 
+    T2: Lazy<State = T1::State>, 
+    T3: Lazy<State = T1::State>,
+{
+    type Output = (T1::Output, T2::Output, T3::Output);
+    type State = T1::State;
 
-    fn realize(self, state: &Self::State) -> Self::Output {
-        (self.0.realize(state).0, self.1.realize(state).0, self.2.realize(state).0)
+    fn get(self, state: &Self::State) -> Self::Output {
+        (self.0.get(state), self.1.get(state), self.2.get(state))
     }
 }
 
@@ -185,17 +190,23 @@ mod tests {
 
     #[test]
     fn new_api() {
-        // let mut dispatcher = CommandDispatcher::default();
-        let foo = param::<i32>()
+        let mut dispatcher = CommandDispatcher::default();
+        let tp = param::<i32>()
             .then(param::<i32>())
             .then(param::<i32>())
-            .map(|x: i32, y: i32, z: i32| (Const((x,)), Const((y,)), Const((z,))))
+            .map(|x: i32, y: i32, z: i32| (Const(x), Const(y), Const(z)))
             .untuple_one()
-            .execute(|x: i32, y: i32, z: i32| todo!());
+            .execute(|x: i32, y: i32, z: i32| {
+                println!("you have teleported to {} {} {}", x, y, z);
+            });
 
-        // let result = dispatcher.call(PlayerState(0, 0, 0), "tp 10 20 30");
-        // dbg!(&result);
-        // assert!(result.is_ok())
+        dispatcher.register("tp", tp);
+
+
+
+        let result = dispatcher.call(&(), "tp 10 20 30");
+        dbg!(&result);
+        assert!(result.is_ok())
     }
 
     #[test]

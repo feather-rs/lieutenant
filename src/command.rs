@@ -1,5 +1,5 @@
 use crate::generic::{Combine, Either, Func, FuncOnce, HList, Tuple};
-use crate::parser::Realize;
+use crate::parser::Lazy;
 
 pub struct Ref<T>(T);
 pub struct RefMut<T>(T);
@@ -11,22 +11,20 @@ pub trait State {
 
 pub trait Command {
     type Output;
-    fn call<S>(self, state: S) -> Self::Output
-    where
-        S: State;
+    type State;
+
+    fn call(self, state: &Self::State) -> Self::Output;
 }
 
 impl<A, B> Command for Either<A, B>
 where
     A: Command,
-    B: Command<Output = A::Output>,
+    B: Command<Output = A::Output, State = A::State>,
 {
     type Output = A::Output;
+    type State = A::State;
 
-    fn call<S>(self, state: S) -> Self::Output
-    where
-        S: State,
-    {
+    fn call(self, state: &Self::State) -> Self::Output {
         match self {
             Either::A(a) => a.call(state),
             Either::B(b) => b.call(state),
@@ -41,16 +39,15 @@ pub struct CommandMapping<A, F> {
 
 impl<A, F> Command for CommandMapping<A, F>
 where
-    A: Tuple,
-    F: Func<A>,
+    A: Lazy,
+    A::Output: Tuple,
+    F: Func<A::Output>,
 {
     type Output = F::Output;
+    type State = A::State;
 
-    fn call<T>(self, state: T) -> Self::Output
-    where
-        T: State,
-    {
-        let arguments = todo!(); // self.arguments.realize(state);
+    fn call(self, state: &Self::State) -> Self::Output {
+        let arguments = self.arguments.get(state);
 
         // TODO handle option such to avoide unwrap
         self.callback.call(arguments)
@@ -66,15 +63,15 @@ impl<A, F> CommandMapping<A, F> {
     }
 }
 
-impl<A, F> FuncOnce<A::State> for CommandMapping<A, F>
+impl<A, F> FuncOnce<&mut A::State> for CommandMapping<A, F>
 where
-    A: Realize,
+    A: Lazy,
     F: Func<A::Output>,
 {
     type Output = F::Output;
 
-    fn call(self, state: A::State) -> Self::Output {
-        let realized_arguments = self.arguments.realize(&state);
+    fn call(self, state: &mut A::State) -> Self::Output {
+        let realized_arguments = self.arguments.get(&state);
         self.callback.call(realized_arguments)
     }
 }

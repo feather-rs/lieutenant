@@ -37,6 +37,13 @@ where
     }
 }
 
+pub trait Lazy {
+    type State;
+    type Output: Tuple;
+    
+    fn get(self, state: &Self::State) -> Self::Output;
+}
+
 pub trait HList: Sized {
     type Tuple: Tuple<HList = Self>;
 
@@ -133,6 +140,8 @@ macro_rules! product_pat {
 
 macro_rules! generics {
     ($type:ident) => {
+        
+
         impl<$type> HList for Product!($type) {
             type Tuple = ($type,);
 

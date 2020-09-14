@@ -1,5 +1,5 @@
 
-use super::{Parser, ParserBase, Tuple, HList, Combine, Input, Func, Result, Realize};
+use super::{Parser, ParserBase, Tuple, HList, Combine, Input, Func, Result, Lazy};
 use crate::command::CommandMapping;
 
 pub struct Executor<P, F> {
@@ -10,8 +10,8 @@ pub struct Executor<P, F> {
 impl<P, F> ParserBase for Executor<P, F>
 where
     P: Parser,
-    P::Extract: Realize,
-    F: Func<<P::Extract as Realize>::Output> + Clone,
+    P::Extract: Lazy,
+    F: Func<<P::Extract as Lazy>::Output> + Clone,
 {
     type Extract = (CommandMapping<P::Extract, F>,);
 
