@@ -5,6 +5,7 @@ use crate::{
     parser::{self, And, IterParser, MaybeSpaces, OneOrMoreSpace},
 };
 
+
 // use std::marker::PhantomData;
 pub fn space() -> OneOrMoreSpace {
     OneOrMoreSpace
@@ -12,7 +13,7 @@ pub fn space() -> OneOrMoreSpace {
 
 pub fn literal(value: &str) -> parser::Literal {
     parser::Literal {
-        value: regex::escape(value),
+        value: String::from(value)
     }
 }
 

@@ -1,5 +1,6 @@
 use super::parser::IterParser;
 use anyhow::{anyhow, Result};
+use regex_syntax;
 
 /// A literal should not have leading or trailing whitespaces.
 pub struct Literal {
@@ -72,7 +73,7 @@ impl IterParser for Literal {
     }
 
     fn regex(&self) -> String {
-        regex::escape(self.value.as_str())
+        regex_syntax::escape(self.value.as_str())
     }
 }
 
