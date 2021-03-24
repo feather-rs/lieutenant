@@ -1,5 +1,5 @@
 #[cfg(test)]
-use super::parser::IterParser;
+use super::IterParser;
 
 /*
 This file contains  convenience struct that i use for testing.

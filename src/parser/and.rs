@@ -1,8 +1,6 @@
 use crate::generic::{Combine, CombinedTuples, Tuple};
 
-use super::parser::IterParser;
-
-
+use super::IterParser;
 
 pub struct And<A, B> {
     pub(crate) a: A,
@@ -74,8 +72,8 @@ where
 {
     type Extract = CombinedTuples<A::Extract, B::Extract>;
     type ParserState = AndState<A, B>;
-    
-    #[allow(clippy::type_complexity,clippy::needless_return)]
+
+    #[allow(clippy::type_complexity, clippy::needless_return)]
     fn parse<'p>(
         &self,
         state: AndState<A, B>,

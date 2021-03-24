@@ -1,4 +1,4 @@
-use super::parser::IterParser;
+use super::IterParser;
 use anyhow::{anyhow, Result};
 
 /// A literal should not have leading or trailing whitespaces.
@@ -16,7 +16,7 @@ impl IterParser for Literal {
     type Extract = ();
     type ParserState = ();
 
-        #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity)]
     fn parse<'i>(
         &self,
         _state: Self::ParserState,
@@ -143,14 +143,4 @@ mod tests {
         assert!(res.len() == 1);
         assert!(res.get(0).unwrap().as_ref().unwrap().1 == " me");
     }
-
-    // #[test]
-    // fn longer_literal() {
-    //     let lit = Literal {
-    //         value: String::from("tp"),
-    //     };
-
-    //     let input = &mut "t";
-    //     assert!(lit.parse(input).is_err());
-    // }
 }

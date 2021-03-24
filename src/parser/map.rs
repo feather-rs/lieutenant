@@ -1,5 +1,5 @@
 use crate::generic::Func;
-use crate::parser::parser::IterParser;
+use crate::parser::IterParser;
 
 pub struct Map<P, F> {
     pub(crate) parser: P,

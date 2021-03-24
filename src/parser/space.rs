@@ -39,7 +39,6 @@ impl Default for MaybeSpaces {
     }
 }
 
-
 impl IterParser for OneOrMoreSpace {
     type Extract = ();
 

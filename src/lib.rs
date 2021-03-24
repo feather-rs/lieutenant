@@ -14,7 +14,7 @@ extern crate quickcheck_macros;
 mod tests {
 
     use crate::command::builder::{literal, CommandBuilder};
-    use crate::command::command::Command;
+    use crate::command::Command;
     // //use crate::command::CommandBuilder;
     // use crate::{
     //     //command::{literal, Command},

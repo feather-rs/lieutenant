@@ -1,6 +1,6 @@
 use crate::generic::Tuple;
 
-use super::parser::IterParser;
+use super::IterParser;
 
 pub struct Opt<P> {
     pub(crate) parser: P,
@@ -53,12 +53,8 @@ where
                     (Ok((ext, out)), Some(new_state)) => {
                         (Ok(((Some(ext),), out)), Some(OptState::Consume(new_state)))
                     }
-                    (Err(err), None) => {
-                        (Err(err), Some(OptState::Skip()))
-                    }
-                    (Err(err), Some(new_state)) => {
-                        (Err(err), Some(OptState::Consume(new_state)))
-                    }
+                    (Err(err), None) => (Err(err), Some(OptState::Skip())),
+                    (Err(err), Some(new_state)) => (Err(err), Some(OptState::Consume(new_state))),
                 }
             }
         }

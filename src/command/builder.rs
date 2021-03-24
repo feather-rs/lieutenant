@@ -1,10 +1,9 @@
-use super::command::CommandSpec;
+use super::CommandSpec;
 use crate::{
     argument::Argument,
     generic::Func,
     parser::{self, And, IterParser, MaybeSpaces, OneOrMoreSpace},
 };
-
 
 // use std::marker::PhantomData;
 pub fn space() -> OneOrMoreSpace {
@@ -13,7 +12,7 @@ pub fn space() -> OneOrMoreSpace {
 
 pub fn literal(value: &str) -> parser::Literal {
     parser::Literal {
-        value: String::from(value)
+        value: String::from(value),
     }
 }
 
@@ -72,7 +71,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::command::command::{Command, CommandSpec};
+    use crate::command::{Command, CommandSpec};
 
     use super::{literal, CommandBuilder};
 
