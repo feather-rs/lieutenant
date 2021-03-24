@@ -134,7 +134,7 @@ mod tests {
                 assert!(dfa[x].is_assosiated_with(&42))
             }
             Err(_) => {
-                assert!(false)
+                panic!()
             }
         }
     }

@@ -456,15 +456,15 @@ mod tests {
 
     #[test]
     fn simple_opt_4() {
-        for word in vec!["tp", "tango", "121", "œeœ", "ࢰࢰ", "😈😈😈"] {
+        for word in &["tp", "tango", "121", "œeœ", "ࢰࢰ", "😈😈😈"] {
             let lit1 = crate::parser::Literal {
-                value: String::from(word),
+                value: String::from(*word),
             };
 
             let opt1 = crate::parser::Opt { parser: lit1 };
 
             let lit2 = crate::parser::Literal {
-                value: String::from(word),
+                value: String::from(*word),
             };
 
             let opt2 = crate::parser::Opt { parser: lit2 };

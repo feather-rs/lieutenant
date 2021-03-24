@@ -34,7 +34,7 @@ impl<A> DfaState<A> {
 impl<A: Eq + std::hash::Hash> DfaState<A> {
     #[cfg(test)]
     pub fn is_assosiated_with(&self, value: &A) -> bool {
-        return self.assosiations.contains(value);
+        self.assosiations.contains(value)
     }
 }
 

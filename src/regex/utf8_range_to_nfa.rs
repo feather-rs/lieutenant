@@ -655,14 +655,14 @@ mod tests {
     use super::*;
 
     fn is_between(from: char, x: char, to: char) -> bool {
-        return (from as u32) <= (x as u32) && (x as u32) <= (to as u32);
+        (from as u32) <= (x as u32) && (x as u32) <= (to as u32)
     }
 
     #[quickcheck]
     fn qt_between2(from: char, to: char, other: char) -> bool {
         match (from.len_utf8(), to.len_utf8(), other.len_utf8()) {
             (2, 2, 2) => {
-                if !(from < to) {
+                if from >= to {
                     return true;
                 }
 
@@ -680,7 +680,7 @@ mod tests {
                     StateId::of(0),
                 );
                 let dfa = DFA::from(nfa);
-                let found = if !dfa.find(other.to_string().as_str()).is_ok() {
+                let found = if dfa.find(other.to_string().as_str()).is_err() {
                     let mut value_buff = [0u8; 4];
                     other.encode_utf8(&mut value_buff);
                     println!(
@@ -708,7 +708,7 @@ mod tests {
     fn qt_between3(from: char, to: char, other: char) -> bool {
         match (from.len_utf8(), to.len_utf8(), other.len_utf8()) {
             (3, 3, 3) => {
-                if !(from < to) {
+                if to < from {
                     return true;
                 }
 
@@ -726,7 +726,7 @@ mod tests {
                     StateId::of(0),
                 );
                 let dfa = DFA::from(nfa);
-                let found = if !dfa.find(other.to_string().as_str()).is_ok() {
+                let found = if dfa.find(other.to_string().as_str()).is_err() {
                     let mut value_buff = [0u8; 4];
                     other.encode_utf8(&mut value_buff);
                     println!(
@@ -759,7 +759,7 @@ mod tests {
         let class = ClassUnicodeRange::new(from, to);
         let nfa = NFA::<usize>::from(&class);
 
-        if !(nfa._find(other.to_string().as_str()).is_ok()) {
+        if nfa._find(other.to_string().as_str()).is_err() {
             let mut from_buff = [0u8; 4];
             from.encode_utf8(&mut from_buff);
             let mut to_buff = [0u8; 4];
@@ -1086,7 +1086,7 @@ mod tests {
                     let string = value.to_string();
 
                     if is_between(*from, *value, *to) || is_between(*to, *value, *from) {
-                        if !(dfa.find(&string).is_ok()) {
+                        if dfa.find(&string).is_err() {
                             let mut from_buff = [0u8; 4];
                             from.encode_utf8(&mut from_buff);
                             let mut to_buff = [0u8; 4];
@@ -1109,9 +1109,9 @@ mod tests {
                                 "ERROR from:{} to:{} value:{} should be accepted",
                                 from, to, value
                             );
-                            assert!(false);
+                            panic!(false);
                         }
-                    } else if !(dfa.find(&string).is_err()) {
+                    } else if dfa.find(&string).is_ok() {
                         let mut from_buff = [0u8; 4];
                         from.encode_utf8(&mut from_buff);
                         let mut to_buff = [0u8; 4];
@@ -1134,7 +1134,7 @@ mod tests {
                             "ERROR from:{} to:{} value:{} should fail but does not",
                             from, to, value
                         );
-                        assert!(false);
+                        panic!()
                     }
                 }
             }

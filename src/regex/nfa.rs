@@ -463,7 +463,7 @@ mod tests {
 
     #[quickcheck]
     fn literal_param(input: String) -> bool {
-        let nfa = NFA::<usize>::literal(input.clone().as_str());
+        let nfa = NFA::<usize>::literal(input.as_str());
         nfa._find(input.as_str()).is_ok()
     }
 
@@ -482,7 +482,7 @@ mod tests {
     #[test]
     fn followed_by_eq() {
         let testcase = ["a", "abba", "abb", "ab", "aba", "b"];
-        let mut testcase2 = testcase.clone();
+        let mut testcase2 = testcase;
         testcase2.reverse();
 
         for head in testcase.iter() {
@@ -518,7 +518,7 @@ mod tests {
     fn repeat_param1(lit: String) -> bool {
         let head_nfa = NFA::<usize>::literal(lit.as_str());
         let nfa = head_nfa.repeat().unwrap();
-        nfa._find(format!("{}", lit.as_str()).as_str()).is_ok()
+        nfa._find( lit).is_ok()
     }
 
     #[quickcheck]
@@ -542,7 +542,7 @@ mod tests {
                 format!("{} zero", t)
             );
             assert!(
-                nfa._find(format!("{}", t).as_str()).is_ok(),
+                nfa._find(t.to_string().as_str()).is_ok(),
                 format!("{} one", t)
             );
             assert!(
@@ -557,7 +557,7 @@ mod tests {
         let nfa = NFA::<usize>::literal(a.as_str());
         let nfb = NFA::<usize>::literal(b.as_str());
         let or = nfa.or(nfb).unwrap();
-        return or._find(&a).is_ok() && or._find(&b).is_ok();
+        or._find(&a).is_ok() && or._find(&b).is_ok()
     }
 
     #[quickcheck]
@@ -566,7 +566,7 @@ mod tests {
         let nfb = NFA::<usize>::literal(b.as_str());
         let or = nfa.or(nfb).unwrap();
         if a != c && b != c {
-            return !or._find(&c).is_ok();
+            or._find(&c).is_err()
         } else {
             true
         }
@@ -614,8 +614,8 @@ mod tests {
         let a_end = a_ends.iter().find(|x| or.ends.contains(x)).unwrap();
         let b_end = b_ends.iter().find(|x| or.ends.contains(x)).unwrap();
 
-        let x = &or[a_end.clone()].assosiations.contains(&ass);
-        let y = &or[b_end.clone()].assosiations.contains(&bss);
+        let x = &or[*a_end].assosiations.contains(&ass);
+        let y = &or[*b_end].assosiations.contains(&bss);
 
         *x && *y
     }

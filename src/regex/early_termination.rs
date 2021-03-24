@@ -226,7 +226,7 @@ mod tests {
         match dfa.early_termination_find("hi") {
             Ok(_) => {}
             Err(_) => {
-                assert!(false)
+                panic!()
             }
         }
     }
