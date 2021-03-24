@@ -1,24 +1,15 @@
 [package]
 name = "lieutenant"
-version = "0.2.0"
-authors = ["caelunshun <caelunshun@gmail.com>"]
+version = "0.3.0"
+authors = ["caelunshun <caelunshun@gmail.com>","miroad <miro.sveits@gmail.com>","Jacob Emil Ulvedal Rosborg <jacob@rosborg.dk>"]
 edition = "2018"
 
 [dependencies]
-lieutenant-macros = { path =  "macros" }
-
-slab = "0.4"
-smallvec = "1.4"
-derivative = "2.1"
+anyhow = "1.0"
+indexmap = "1.6"
+quickcheck = "1"
+regex-syntax = "0.6.18"
 
 [dev-dependencies]
-criterion = "0.3"
-thiserror = "1.0"
-anyhow = "1.0"
-
-[[bench]]
-name = "dispatcher"
-harness = false
-
-[workspace]
-members = [".", "macros"]
+quickcheck = "1"
+quickcheck_macros = "1"
