@@ -1,2 +1,3 @@
 pub mod builder;
-pub mod command;
+mod command;
+pub use command::*;

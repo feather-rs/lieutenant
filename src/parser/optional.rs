@@ -26,6 +26,7 @@ where
     type Extract = (Option<P::Extract>,);
     type ParserState = OptState<P::ParserState>;
 
+    #[allow(clippy::type_complexity)]
     fn parse<'p>(
         &self,
         state: Self::ParserState,
@@ -38,7 +39,7 @@ where
             OptState::Skip() => {
                 // We have parsed the input consuming, and the sub parser has stopped giving us alternatives.
                 // We need to switch tactics and try to not parse anything, returning None.
-                return (Ok(((None,), input)), None);
+                (Ok(((None,), input)), None)
             }
             OptState::Consume(sub_parser_state) => {
                 // We parse the input trying to consume the start.
@@ -47,23 +48,23 @@ where
                 match (res, sub_parser_state) {
                     (Ok((ext, out)), None) => {
                         // Match and no more cases for the sub parser
-                        return (Ok(((Some(ext),), out)), Some(OptState::Skip()));
+                        (Ok(((Some(ext),), out)), Some(OptState::Skip()))
                     }
                     (Ok((ext, out)), Some(new_state)) => {
-                        return (Ok(((Some(ext),), out)), Some(OptState::Consume(new_state)));
+                        (Ok(((Some(ext),), out)), Some(OptState::Consume(new_state)))
                     }
                     (Err(err), None) => {
-                        return (Err(err), Some(OptState::Skip()));
+                        (Err(err), Some(OptState::Skip()))
                     }
                     (Err(err), Some(new_state)) => {
-                        return (Err(err), Some(OptState::Consume(new_state)));
+                        (Err(err), Some(OptState::Consume(new_state)))
                     }
                 }
             }
         }
     }
     fn regex(&self) -> String {
-        String::from(format!("({})?", self.parser.regex()))
+        format!("({})?", self.parser.regex())
     }
 }
 

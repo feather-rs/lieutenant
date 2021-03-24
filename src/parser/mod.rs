@@ -3,8 +3,10 @@ mod evaluator;
 mod literal;
 mod map;
 mod optional;
-pub mod parser;
+mod parser;
 mod space;
+
+pub use parser::*;
 
 pub use and::*;
 #[cfg(test)]

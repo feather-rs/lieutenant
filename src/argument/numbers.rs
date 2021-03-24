@@ -9,6 +9,7 @@ impl IterParser for U32Parser {
 
     type ParserState = ();
 
+    #[allow(clippy::type_complexity)]
     fn parse<'p>(
         &self,
         _state: Self::ParserState,
@@ -37,9 +38,9 @@ impl IterParser for U32Parser {
         }
 
         match input[0..=index].parse::<u32>() {
-            Ok(number) => return (Ok(((number,), input)), None),
-            Err(_) => return (Err(anyhow::anyhow!("Not a number")), None),
-        };
+            Ok(number) => (Ok(((number,), input)), None),
+            Err(_) => (Err(anyhow::anyhow!("Not a number")), None),
+        }
     }
 
     fn regex(&self) -> String {

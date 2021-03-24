@@ -72,9 +72,9 @@ impl<C: Copy + std::hash::Hash + Eq + std::fmt::Debug> NFA<CmdPos<C>> {
         let assosiated_values = {
             let mut values = HashSet::new();
             for id in start_ids.iter() {
-                let state = &self[id.clone()];
+                let state = &self[*id];
                 for a in state.assosiations.iter() {
-                    values.insert(a.clone());
+                    values.insert(*a);
                 }
             }
             values
@@ -116,12 +116,12 @@ impl<C: Copy + std::hash::Hash + Eq + std::fmt::Debug> NFA<CmdPos<C>> {
             if let Some(c) = unique_assoc {
                 // Then we can make this dfa state a early termination.
                 dfa.assosiate(dfa_id, iter::once(CmdPos::End(c)).collect());
-                dfa.set_transitions(dfa_id.clone(), vec![None; 256]);
+                dfa.set_transitions(dfa_id, vec![None; 256]);
                 continue;
             }
 
             // For each possible input symbol
-            for b in 0..=255 as u8 {
+            for b in 0..=255_u8 {
                 // Apply move to the newly-created state and the input symbol; this will return a set of states.
                 let move_states = self.go(&nfa_ids, b);
 
@@ -134,17 +134,17 @@ impl<C: Copy + std::hash::Hash + Eq + std::fmt::Debug> NFA<CmdPos<C>> {
                 let move_state_e = self.epsilon_closure(move_states);
 
                 let dfa_e_id = if let Some(dfa_e_id) = nfa_to_dfa.get(&move_state_e) {
-                    dfa_e_id.clone()
+                    *dfa_e_id
                 } else {
                     let dfa_e_id = dfa.push_state();
-                    nfa_to_dfa.insert(move_state_e.clone(), dfa_e_id.clone());
+                    nfa_to_dfa.insert(move_state_e.clone(), dfa_e_id);
 
                     let assosiated_values = {
                         let mut values = HashSet::new();
                         for id in move_state_e.iter() {
-                            let state = &self[id.clone()];
+                            let state = &self[*id];
                             for a in state.assosiations.iter() {
-                                values.insert(a.clone());
+                                values.insert(*a);
                             }
                         }
                         values
@@ -159,9 +159,9 @@ impl<C: Copy + std::hash::Hash + Eq + std::fmt::Debug> NFA<CmdPos<C>> {
                 transitions.push(Some(dfa_e_id));
             }
 
-            dfa.set_transitions(dfa_id.clone(), transitions);
+            dfa.set_transitions(dfa_id, transitions);
             if is_end {
-                dfa.push_end(dfa_id.clone());
+                dfa.push_end(dfa_id);
             }
         }
 
@@ -190,7 +190,7 @@ impl<C: Copy + std::hash::Hash + Eq + std::fmt::Debug> DFA<CmdPos<C>> {
                         .filter(|cp| cp.is_end())
                         .map(|cp| *cp.value())
                         .collect();
-                    if ends.len() > 0 {
+                    if !ends.is_empty() {
                         Ok(ends)
                     } else {
                         Err(self

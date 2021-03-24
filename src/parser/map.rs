@@ -26,6 +26,7 @@ where
     type Extract = (F::Output,);
     type ParserState = P::ParserState;
 
+    #[allow(clippy::type_complexity)]
     fn parse<'p>(
         &self,
         state: Self::ParserState,
@@ -37,8 +38,8 @@ where
         let (result, state) = self.parser.parse(state, input);
 
         match result {
-            Ok((ext, out)) => return (Ok(((self.map.call(ext),), out)), state),
-            Err(err) => return (Err(err), state),
+            Ok((ext, out)) => (Ok(((self.map.call(ext),), out)), state),
+            Err(err) => (Err(err), state),
         }
     }
     fn regex(&self) -> String {

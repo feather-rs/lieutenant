@@ -146,7 +146,7 @@ impl<A: Copy + Eq + std::hash::Hash + Debug> NFA<A> {
     }
 
     pub(crate) fn push_connection(&mut self, from: StateId, to: StateId, c: u8) {
-        let mut state = self.index(from.clone()).clone();
+        let mut state = self.index(from).clone();
         //state.push_connection(self,to,c);
 
         let byteclass = &self[state.class.clone()];
@@ -260,7 +260,7 @@ impl<A: Copy + Eq + std::hash::Hash + Debug> NFA<A> {
         }
 
         for old_end in self.ends.clone() {
-            self.push_epsilon(old_end.clone(), StateId(state_ofset as u32));
+            self.push_epsilon(old_end, StateId(state_ofset as u32));
         }
         self.ends = other
             .ends
@@ -277,7 +277,7 @@ impl<A: Copy + Eq + std::hash::Hash + Debug> NFA<A> {
 
         for c in lit.bytes() {
             let next = nfa.push_state();
-            nfa.push_connection(prev, next.clone(), c);
+            nfa.push_connection(prev, next, c);
             prev = next;
         }
 
@@ -344,21 +344,21 @@ impl<A: Copy + Eq + std::hash::Hash + Debug> NFA<A> {
         let c = nfa.push_state();
         let d = nfa.push_state();
 
-        nfa.push_epsilon(a.clone(), d.clone());
-        nfa.push_epsilon(a.clone(), b.clone());
-        nfa.ends = vec![b.clone()]; // Makes self connect with epsilon from b
+        nfa.push_epsilon(a, d);
+        nfa.push_epsilon(a, b);
+        nfa.ends = vec![b]; // Makes self connect with epsilon from b
         nfa.followed_by(self)?;
 
         // Makes self connecting to c
         let ends = mem::take(&mut nfa.ends);
         for end in ends {
-            nfa.push_epsilon(end.clone(), c.clone());
+            nfa.push_epsilon(end, c);
             let assocs = mem::take(&mut nfa[end].assosiations);
-            nfa[d.clone()].extend_association_with(assocs);
+            nfa[d].extend_association_with(assocs);
         }
 
-        nfa.push_epsilon(c.clone(), b);
-        nfa.push_epsilon(c, d.clone());
+        nfa.push_epsilon(c, b);
+        nfa.push_epsilon(c, d);
 
         nfa.ends.push(d);
 

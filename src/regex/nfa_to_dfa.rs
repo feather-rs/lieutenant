@@ -52,9 +52,9 @@ impl<A: Eq + std::hash::Hash + Copy + Debug> From<NFA<A>> for DFA<A> {
         let assosiated_values = {
             let mut values = HashSet::new();
             for id in start_ids.iter() {
-                let state = &nfa[id.clone()];
+                let state = &nfa[*id];
                 for a in state.assosiations.iter() {
-                    values.insert(a.clone());
+                    values.insert(*a);
                 }
             }
             values
@@ -67,7 +67,7 @@ impl<A: Eq + std::hash::Hash + Copy + Debug> From<NFA<A>> for DFA<A> {
             let dfa_id = nfa_to_dfa[&nfa_ids];
 
             // For each possible input symbol
-            for b in 0..=255 as u8 {
+            for b in 0..=255_u8 {
                 // Apply move to the newly-created state and the input symbol; this will return a set of states.
                 let move_states = nfa.go(&nfa_ids, b);
 
@@ -80,17 +80,17 @@ impl<A: Eq + std::hash::Hash + Copy + Debug> From<NFA<A>> for DFA<A> {
                 let move_state_e = nfa.epsilon_closure(move_states);
 
                 let dfa_e_id = if let Some(dfa_e_id) = nfa_to_dfa.get(&move_state_e) {
-                    dfa_e_id.clone()
+                    *dfa_e_id
                 } else {
                     let dfa_e_id = dfa.push_state();
-                    nfa_to_dfa.insert(move_state_e.clone(), dfa_e_id.clone());
+                    nfa_to_dfa.insert(move_state_e.clone(), dfa_e_id);
 
                     let assosiated_values = {
                         let mut values = HashSet::new();
                         for id in move_state_e.iter() {
-                            let state = &nfa[id.clone()];
+                            let state = &nfa[*id];
                             for a in state.assosiations.iter() {
-                                values.insert(a.clone());
+                                values.insert(*a);
                             }
                         }
                         values
@@ -105,9 +105,9 @@ impl<A: Eq + std::hash::Hash + Copy + Debug> From<NFA<A>> for DFA<A> {
                 transitions.push(Some(dfa_e_id));
             }
 
-            dfa.set_transitions(dfa_id.clone(), transitions);
+            dfa.set_transitions(dfa_id, transitions);
             if is_end {
-                dfa.push_end(dfa_id.clone());
+                dfa.push_end(dfa_id);
             }
         }
 

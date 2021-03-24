@@ -149,7 +149,7 @@ fn between3<A: std::hash::Hash + Eq + Copy + std::fmt::Debug>(
         }
     }
 }
-
+#[allow(clippy::many_single_char_names)]
 fn any_char_of_length<A: std::hash::Hash + Eq + Copy + std::fmt::Debug>(
     nfa: &mut NFA<A>,
     n: usize,
@@ -188,7 +188,7 @@ fn any_char_of_length<A: std::hash::Hash + Eq + Copy + std::fmt::Debug>(
             nfa.push_end(e)
         }
         _ => {
-            assert!(false)
+            panic!("Not a valid length of a utf-8 char")
         }
     }
 }
@@ -301,7 +301,7 @@ fn below_or_eq_for_given_length<A: std::hash::Hash + Eq + Copy + std::fmt::Debug
         }
 
         _ => {
-            assert!(false, "not a valid start on suposed utf-8 bytes")
+            panic!("not a valid start on suposed utf-8 bytes")
         }
     }
 }
@@ -414,7 +414,7 @@ fn more_or_eq_for_given_length<A: std::hash::Hash + Eq + Copy + std::fmt::Debug>
         }
 
         _ => {
-            assert!(false, "Not a valid start byte for a suposed utf-8 char")
+            panic!("Not a valid start byte for a suposed utf-8 char")
         }
     }
 }

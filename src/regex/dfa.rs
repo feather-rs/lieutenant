@@ -46,6 +46,16 @@ pub struct DFA<A> {
     pub(crate) transitions: IndexSet<ByteClass>,
 }
 
+impl<A> Default for DFA<A> {
+    fn default() -> Self {
+        Self {
+            states: vec![],
+            ends: vec![],
+            transitions: IndexSet::new(),
+        }
+    }
+}
+
 impl<A: std::hash::Hash + Eq + Clone> DFA<A> {
     pub fn new() -> Self {
         Self {

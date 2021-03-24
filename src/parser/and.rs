@@ -2,6 +2,8 @@ use crate::generic::{Combine, CombinedTuples, Tuple};
 
 use super::parser::IterParser;
 
+
+
 pub struct And<A, B> {
     pub(crate) a: A,
     pub(crate) b: B,
@@ -72,7 +74,8 @@ where
 {
     type Extract = CombinedTuples<A::Extract, B::Extract>;
     type ParserState = AndState<A, B>;
-
+    
+    #[allow(clippy::type_complexity,clippy::needless_return)]
     fn parse<'p>(
         &self,
         state: AndState<A, B>,
@@ -107,14 +110,14 @@ where
                                 let a_out_index = a_out.len();
 
                                 let cloned_a_ext = a_ext.clone();
-                                return (
+                                (
                                     Ok((a_ext.combine(b_ext), b_out)),
                                     Some(AndState {
                                         a_state: None,
                                         a_ext: Some((cloned_a_ext, a_out_index)),
                                         b_state: Some(b_state),
                                     }),
-                                );
+                                )
                             }
                             None => {
                                 // The B parser has no more to give, and in this match arm the A parser also has nothing more
@@ -349,7 +352,7 @@ where
     }
 
     fn regex(&self) -> String {
-        String::from(format!("({})({})", &self.a.regex(), &self.b.regex()))
+        format!("({})({})", &self.a.regex(), &self.b.regex())
     }
 }
 

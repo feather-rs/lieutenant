@@ -1,6 +1,5 @@
 use super::parser::IterParser;
 use anyhow::{anyhow, Result};
-use regex_syntax;
 
 /// A literal should not have leading or trailing whitespaces.
 pub struct Literal {
@@ -17,6 +16,7 @@ impl IterParser for Literal {
     type Extract = ();
     type ParserState = ();
 
+        #[allow(clippy::type_complexity)]
     fn parse<'i>(
         &self,
         _state: Self::ParserState,
@@ -28,7 +28,7 @@ impl IterParser for Literal {
             .flat_map(|c| c.to_lowercase())
             .peekable();
         let literal_lower = &mut self.value.chars().flat_map(|c| c.to_lowercase()).peekable();
-        let mut ofsett = 0_usize;
+        let mut ofsett = 0;
 
         loop {
             match (literal_lower.next(), input_lower.next()) {

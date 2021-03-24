@@ -10,6 +10,11 @@ pub trait IterParser {
     // generators of potential parsing results.
     type ParserState: Default;
 
+    /// State is set to default at first call, and is thereafter the state that was returned on the last call. 
+    /// this makes it so we can iterate over many possible attempts at parsin the input. 
+    /// We have to do this becaue else its impossible to correctly parse (Option<u32>,  u32) from the input "42".
+    /// we first need to try parsing were the option consumes the 42, and then we need to try the case were it does not.
+    #[allow(clippy::type_complexity)]
     fn parse<'p>(
         &self,
         state: Self::ParserState,

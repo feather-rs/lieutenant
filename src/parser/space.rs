@@ -27,11 +27,25 @@ impl OneOrMoreSpace {
     }
 }
 
+impl Default for OneOrMoreSpace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for MaybeSpaces {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 impl IterParser for OneOrMoreSpace {
     type Extract = ();
 
     type ParserState = ();
 
+    #[allow(clippy::type_complexity)]
     fn parse<'p>(
         &self,
         _state: Self::ParserState,
@@ -58,6 +72,7 @@ impl IterParser for MaybeSpaces {
     type Extract = ();
     type ParserState = ();
 
+    #[allow(clippy::type_complexity)]
     fn parse<'p>(
         &self,
         _state: Self::ParserState,
