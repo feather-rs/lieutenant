@@ -1111,35 +1111,34 @@ mod tests {
                             );
                             assert!(false);
                         }
-                    } else {
-                        if !(dfa.find(&string).is_err()) {
-                            let mut from_buff = [0u8; 4];
-                            from.encode_utf8(&mut from_buff);
-                            let mut to_buff = [0u8; 4];
-                            to.encode_utf8(&mut to_buff);
-                            let mut value_buff = [0u8; 4];
-                            value.encode_utf8(&mut value_buff);
+                    } else if !(dfa.find(&string).is_err()) {
+                        let mut from_buff = [0u8; 4];
+                        from.encode_utf8(&mut from_buff);
+                        let mut to_buff = [0u8; 4];
+                        to.encode_utf8(&mut to_buff);
+                        let mut value_buff = [0u8; 4];
+                        value.encode_utf8(&mut value_buff);
 
-                            println!(
-                                "from:{}:{:?},  to:{}:{:?}  value:{}:{:?}, num:{}",
-                                from,
-                                from_buff.to_vec(),
-                                to,
-                                to_buff.to_vec(),
-                                value,
-                                value_buff.to_vec(),
-                                num
-                            );
+                        println!(
+                            "from:{}:{:?},  to:{}:{:?}  value:{}:{:?}, num:{}",
+                            from,
+                            from_buff.to_vec(),
+                            to,
+                            to_buff.to_vec(),
+                            value,
+                            value_buff.to_vec(),
+                            num
+                        );
 
-                            println!(
-                                "ERROR from:{} to:{} value:{} should fail but does not",
-                                from, to, value
-                            );
-                            assert!(false);
-                        }
+                        println!(
+                            "ERROR from:{} to:{} value:{} should fail but does not",
+                            from, to, value
+                        );
+                        assert!(false);
                     }
                 }
             }
         }
     }
 }
+
