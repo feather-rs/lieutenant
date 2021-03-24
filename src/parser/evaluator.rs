@@ -30,7 +30,7 @@ impl<'p, P: IterParser> Evaluator<'p, P> {
             result.push(res);
             state = new_st;
         }
-        
+
         result
     }
 }

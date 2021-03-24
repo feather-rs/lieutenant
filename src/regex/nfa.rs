@@ -518,7 +518,7 @@ mod tests {
     fn repeat_param1(lit: String) -> bool {
         let head_nfa = NFA::<usize>::literal(lit.as_str());
         let nfa = head_nfa.repeat().unwrap();
-        nfa._find( lit).is_ok()
+        nfa._find(lit).is_ok()
     }
 
     #[quickcheck]
