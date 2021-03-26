@@ -1,6 +1,5 @@
 mod byteclass;
 pub mod dfa;
-mod dfa_minimize;
 pub mod early_termination;
 pub mod nfa;
 mod nfa_to_dfa;
@@ -13,3 +12,4 @@ pub use dfa::*;
 pub use early_termination::*;
 pub use nfa::*;
 pub use stateid::*;
+pub use regex_to_nfa::we_suport_regex;
