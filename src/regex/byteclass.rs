@@ -29,7 +29,7 @@ impl From<u8> for ByteClass {
     fn from(value: u8) -> Self {
         let mut values = [0u8; 256];
         values[value as usize] = 1;
-        Self(values.into())
+        Self(values)
     }
 }
 

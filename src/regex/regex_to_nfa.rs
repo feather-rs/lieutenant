@@ -26,7 +26,7 @@ where
         if n & (1 << bit_index) != 0 {
             println!("bit_index match {}", bit_index);
             result.followed_by(nfa.clone())?;
-            accounted = (1 << bit_index) | accounted;
+            accounted |= 1 << bit_index;
         }
 
         // Double nfa in size
