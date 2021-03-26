@@ -17,7 +17,7 @@ pub(crate) struct ByteClass([u8; 256]);
 
 impl ByteClass {
     pub(crate) fn empty() -> Self {
-        ByteClass([0; 256].into())
+        ByteClass([0; 256])
     }
 
     pub(crate) fn set(&mut self, index: u8, value: u8) {
