@@ -15,12 +15,7 @@ mod tests {
 
     use crate::command::builder::{literal, CommandBuilder};
     use crate::command::Command;
-    // //use crate::command::CommandBuilder;
-    // use crate::{
-    //     //command::{literal, Command},
-    //     AddToDispatcher, Dispatcher,
-    // };
-
+    
     #[test]
     fn simple() {
         // (Gamestate, Extract) -> Res    Extract -> (Gamestate -> Res)
