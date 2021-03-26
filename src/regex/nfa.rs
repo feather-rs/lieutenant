@@ -377,7 +377,7 @@ impl<A: Copy + Eq + std::hash::Hash + Debug> NFA<A> {
         nfa.followed_by(self)?;
 
         let ends = nfa.ends.clone();
-        nfa.ends = vec![a]; 
+        nfa.ends = vec![a];
         nfa.followed_by(other)?;
         nfa.ends.extend(ends);
 

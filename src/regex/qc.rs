@@ -1,4 +1,4 @@
-#[cfg(test)] 
+#[cfg(test)]
 use crate::regex::NFA;
 #[cfg(test)]
 use quickcheck::Arbitrary;

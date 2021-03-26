@@ -132,17 +132,13 @@ fn hir_to_nfa<A: std::hash::Hash + Eq + Copy + std::fmt::Debug>(
                 },
             }
         }
-        regex_syntax::hir::HirKind::Group(group) => {
-            match &group.kind {
-                regex_syntax::hir::GroupKind::CaptureIndex(_) => hir_to_nfa(&group.hir),
-                regex_syntax::hir::GroupKind::NonCapturing => {
-                    hir_to_nfa(&group.hir)
-                }
-                regex_syntax::hir::GroupKind::CaptureName { name: _, index: _ } => {
-                    hir_to_nfa(&group.hir)
-                }
+        regex_syntax::hir::HirKind::Group(group) => match &group.kind {
+            regex_syntax::hir::GroupKind::CaptureIndex(_) => hir_to_nfa(&group.hir),
+            regex_syntax::hir::GroupKind::NonCapturing => hir_to_nfa(&group.hir),
+            regex_syntax::hir::GroupKind::CaptureName { name: _, index: _ } => {
+                hir_to_nfa(&group.hir)
             }
-        }
+        },
         regex_syntax::hir::HirKind::Concat(cats) => {
             let mut nfas = cats.iter().map(|hir| hir_to_nfa(hir));
             let mut fst = nfas.next().unwrap()?;
@@ -211,8 +207,8 @@ impl std::fmt::Debug for RegexConvertError {
 }
 
 /// Checks if regex contains a feature we don't suport, or it just cant be parsed as
-/// valid regex. If this test passes for a command, then the only other failurecase for 
-/// creating a nfa is running out of StateId: u32. 
+/// valid regex. If this test passes for a command, then the only other failurecase for
+/// creating a nfa is running out of StateId: u32.
 pub fn we_suport_regex(regex: &str) -> Result<(), RegexConvertError> {
     let hir = Parser::new().parse(regex);
     let hir = match hir {
@@ -317,8 +313,6 @@ mod tests {
 
         let regex = "\\b";
         assert!(we_suport_regex(regex).is_err());
-
-
     }
 
     #[test]

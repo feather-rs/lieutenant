@@ -11,5 +11,5 @@ mod utf8_range_to_nfa;
 pub use dfa::*;
 pub use early_termination::*;
 pub use nfa::*;
-pub use stateid::*;
 pub use regex_to_nfa::we_suport_regex;
+pub use stateid::*;

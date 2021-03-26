@@ -15,7 +15,7 @@ mod tests {
 
     use crate::command::builder::{literal, CommandBuilder};
     use crate::command::Command;
-    
+
     #[test]
     fn simple() {
         // (Gamestate, Extract) -> Res    Extract -> (Gamestate -> Res)

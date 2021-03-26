@@ -10,8 +10,7 @@ use std::{
 
 #[derive(Debug, Clone, Default)]
 pub struct DfaState<A> {
-
-    // A list of maximum length 256, but usually much shorter. 
+    // A list of maximum length 256, but usually much shorter.
     // It lists all the states self is connected to. None means
     // a none existent state.
     table: Vec<Option<StateId>>,
@@ -19,9 +18,8 @@ pub struct DfaState<A> {
     // A byteclass is a [u8; 256], and says how to move from
     // one state to another. If lets say dfa[self.class][c] == 5, then in
     // terms of a dfa pictoral representatuion, we have a edge going from
-    // self to self.table[c], with the value 5 assosiated with that edge. 
+    // self to self.table[c], with the value 5 assosiated with that edge.
     class: ByteClassId,
-
 
     assosiations: HashSet<A>,
 }
@@ -81,7 +79,7 @@ impl<A: std::hash::Hash + Eq + Clone> DFA<A> {
     pub fn dedup_ends(&mut self) {
         self.ends.dedup()
     }
-    
+
     pub fn push_end(&mut self, end: StateId) {
         self.ends.push(end);
     }
