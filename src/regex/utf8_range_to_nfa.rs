@@ -649,10 +649,8 @@ impl<A: std::hash::Hash + Eq + Copy + std::fmt::Debug> From<&ClassUnicodeRange> 
 
 #[cfg(test)]
 mod tests {
-
-    use crate::regex::dfa::DFA;
-
     use super::*;
+    use crate::regex::dfa::DFA;
 
     fn is_between(from: char, x: char, to: char) -> bool {
         (from as u32) <= (x as u32) && (x as u32) <= (to as u32)

@@ -1,13 +1,18 @@
+#[cfg(test)] 
 use crate::regex::NFA;
+#[cfg(test)]
 use quickcheck::Arbitrary;
+#[cfg(test)]
 use std::{collections::HashSet, iter};
-
+#[cfg(test)]
 const MAX_LIT_LEN: usize = 2; // How many chars the string literals should be.
+#[cfg(test)]
 const DEBTH: usize = 5; // How deep the nfa should be.
 
 /*
 This file contains code for generating testcases for quickcheck.
 */
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub enum NfaQt {
     Lit(String),
@@ -15,6 +20,7 @@ pub enum NfaQt {
     FollowedBy { a: Box<NfaQt>, b: Box<NfaQt> },
 }
 
+#[cfg(test)]
 impl NfaQt {
     fn new(g: &mut quickcheck::Gen, level: usize) -> Self {
         if level == 0 {
@@ -41,6 +47,7 @@ impl NfaQt {
         }
     }
 
+    #[cfg(test)]
     fn build_matches(&self) -> HashSet<String> {
         match self {
             NfaQt::Lit(x) => iter::once(x.to_string()).collect(),
@@ -65,7 +72,7 @@ impl NfaQt {
             }
         }
     }
-
+    #[cfg(test)]
     fn build_nfa(&self) -> NFA<usize> {
         match self {
             NfaQt::Lit(x) => NFA::literal(x),
@@ -84,6 +91,7 @@ impl NfaQt {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub struct NFAQtCase {
     pub kind: NfaQt,
@@ -91,6 +99,7 @@ pub struct NFAQtCase {
     pub nfa: NFA<usize>,
 }
 
+#[cfg(test)]
 impl Arbitrary for NFAQtCase {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         let limit = DEBTH;
