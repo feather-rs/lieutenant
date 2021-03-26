@@ -10,13 +10,18 @@ use std::{
 
 #[derive(Debug, Clone, Default)]
 pub struct DfaState<A> {
-    // The first element should always be present. This is so that the zeros in the byteclass point to something.
-    // The first element would almost always be a None.  This is so that the zeros in the byteclass would signal a failed pars.
+
+    // A list of maximum length 256, but usually much shorter. 
+    // It lists all the states self is connected to. None means
+    // a none existent state.
     table: Vec<Option<StateId>>,
 
-    // A byteclass is basically a [u8; 256]. If it[6] = 1, then from the state 'self' there are outgoing edges containing 6. These edges go from
-    // self to 'x' for x in self.table[1].
+    // A byteclass is a [u8; 256], and says how to move from
+    // one state to another. If lets say dfa[self.class][c] == 5, then in
+    // terms of a dfa pictoral representatuion, we have a edge going from
+    // self to self.table[c], with the value 5 assosiated with that edge. 
     class: ByteClassId,
+
 
     assosiations: HashSet<A>,
 }
@@ -24,7 +29,7 @@ pub struct DfaState<A> {
 impl<A> DfaState<A> {
     fn empty() -> Self {
         Self {
-            table: vec![],
+            table: vec![None],
             class: ByteClassId(0),
             assosiations: HashSet::new(),
         }
@@ -65,10 +70,18 @@ impl<A: std::hash::Hash + Eq + Clone> DFA<A> {
         }
     }
 
+    pub fn rough_size_bytes(&self) -> u64 {
+        self.transitions.len() as u64 * 256
+    }
+
+    pub fn number_of_states(&self) -> usize {
+        self.states.len()
+    }
+
     pub fn dedup_ends(&mut self) {
         self.ends.dedup()
     }
-
+    
     pub fn push_end(&mut self, end: StateId) {
         self.ends.push(end);
     }
