@@ -1,16 +1,32 @@
-mod command;
-mod dispatcher;
-mod parser;
-mod provider;
+pub mod argument;
+pub mod command;
+mod generic;
+pub mod parser;
+pub mod regex;
 
-pub use command::{Argument, Command, CommandSpec};
-pub use dispatcher::CommandDispatcher;
-pub use lieutenant_macros::{command, provider};
-pub use parser::{ArgumentKind, Input};
-pub use provider::{Provideable, Provider};
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
 
-/// Denotes a type that may be passed to commands as input.
-pub trait Context: Send + Sync + 'static {
-    type Error: Send;
-    type Ok;
+#[cfg(test)]
+mod tests {
+
+    use crate::command::builder::{literal, CommandBuilder};
+    use crate::command::Command;
+
+    #[test]
+    fn simple() {
+        // (Gamestate, Extract) -> Res    Extract -> (Gamestate -> Res)
+        let command = literal("/").space().arg::<u32>();
+        let x = command.on_call(|x| {
+            move |game_state, _foo| {
+                println!("hi {} the gamestate was {}", x, game_state);
+                42
+            }
+        });
+
+        let _r = x.call((0, "test"), "/ 100 ").unwrap();
+    }
 }
